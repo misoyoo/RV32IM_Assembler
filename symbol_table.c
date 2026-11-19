@@ -38,9 +38,134 @@ void symbol_table_destroy(SymbolTable *table)
     table->capacity = 0;
 }
 
-// ========================================
-// Add Symbol
-// ========================================
+
+/* ========================================
+   Find Symbol
+   ======================================== */
+
+static Symbol *find_symbol(
+    SymbolTable *table,
+    const char *name
+)
+{
+    if (table == NULL || name == NULL) {
+        return NULL;
+    }
+
+    for (size_t i = 0; i < table->count; i++) {
+        if (strcmp(table->symbols[i].name, name) == 0) {
+            return &table->symbols[i];
+        }
+    }
+
+    return NULL;
+}
+
+/* ========================================
+   Expand Symbol Table
+   ======================================== */
+
+static int expand_symbol_table(SymbolTable *table)
+{
+    if (table->count < table->capacity) {
+        return 0;
+    }
+
+    size_t new_capacity;
+
+    if (table->capacity == 0) {
+        new_capacity = 16;
+    }
+    else {
+        new_capacity = table->capacity * 2;
+
+        if (new_capacity < table->capacity) {
+            return -1;
+        }
+    }
+
+    if (new_capacity > (size_t)-1 / sizeof(Symbol)) {
+        return -1;
+    }
+
+    Symbol *new_symbols = realloc(
+        table->symbols,
+        new_capacity * sizeof(Symbol)
+    );
+
+    if (new_symbols == NULL) {
+        return -1;
+    }
+
+    table->symbols = new_symbols;
+    table->capacity = new_capacity;
+
+    return 0;
+}
+
+/* ========================================
+   Add Typed Symbol
+   ======================================== */
+
+int symbol_table_add_typed(
+    SymbolTable *table,
+    const char *name,
+    uint32_t address,
+    char type
+)
+{
+    if (table == NULL ||
+        name == NULL ||
+        name[0] == '\0' ||
+        strlen(name) >= SYMBOL_NAME_MAX) {
+        return -1;
+    }
+
+    if (type != 'T' &&
+        type != 'D' &&
+        type != 'B' &&
+        type != 'A') {
+        return -1;
+    }
+
+    Symbol *existing = find_symbol(table, name);
+
+    /* Fill a previously declared global symbol */
+
+    if (existing != NULL) {
+        if (existing->defined || !existing->is_global) {
+            return -1;
+        }
+
+        existing->address = address;
+        existing->type = type;
+        existing->defined = 1;
+
+        return 0;
+    }
+
+    if (expand_symbol_table(table) != 0) {
+        return -1;
+    }
+
+    Symbol *new_symbol = &table->symbols[table->count];
+
+    strcpy(new_symbol->name, name);
+
+    new_symbol->address = address;
+    new_symbol->type = type;
+    new_symbol->is_global = 0;
+    new_symbol->defined = 1;
+
+    table->count++;
+
+    return 0;
+}
+
+/* ========================================
+   Add Symbol
+   Default type: Absolute
+   ======================================== */
 
 int symbol_table_add(
     SymbolTable *table,
@@ -48,60 +173,58 @@ int symbol_table_add(
     uint32_t address
 )
 {
-    if (table == NULL || name == NULL || name[0] == '\0') {
-        return -1;
-    }
-
-    if (strlen(name) >= SYMBOL_NAME_MAX) {
-        return -1;
-    }
-
-    uint32_t existing_address;
-
-    if (symbol_table_get(table, name, &existing_address) == 0) {
-        return -1;
-    }
-
-    // Expand capacity when full
-    if (table->count == table->capacity) {
-        size_t new_capacity;
-
-        if (table->capacity == 0) {
-            new_capacity = 16;
-        }
-        else {
-            new_capacity = table->capacity * 2;
-        }
-
-        Symbol *new_symbols = realloc(
-            table->symbols,
-            new_capacity * sizeof(Symbol)
-        );
-
-        if (new_symbols == NULL) {
-            return -1;
-        }
-
-        table->symbols = new_symbols;
-        table->capacity = new_capacity;
-    }
-
-    // Store new symbol
-    strcpy(
-        table->symbols[table->count].name,
-        name
+    return symbol_table_add_typed(
+        table,
+        name,
+        address,
+        'A'
     );
+}
 
-    table->symbols[table->count].address = address;
+/* ========================================
+   Declare Global Symbol
+   ======================================== */
+
+int symbol_table_declare_global(
+    SymbolTable *table,
+    const char *name
+)
+{
+    if (table == NULL ||
+        name == NULL ||
+        name[0] == '\0' ||
+        strlen(name) >= SYMBOL_NAME_MAX) {
+        return -1;
+    }
+
+    Symbol *existing = find_symbol(table, name);
+
+    if (existing != NULL) {
+        existing->is_global = 1;
+        return 0;
+    }
+
+    if (expand_symbol_table(table) != 0) {
+        return -1;
+    }
+
+    Symbol *new_symbol = &table->symbols[table->count];
+
+    strcpy(new_symbol->name, name);
+
+    new_symbol->address = 0;
+    new_symbol->type = 'U';
+    new_symbol->is_global = 1;
+    new_symbol->defined = 0;
 
     table->count++;
 
     return 0;
 }
 
-// ========================================
-// Get Symbol Address
-// ========================================
+/* ========================================
+   Get Symbol Address
+   ======================================== */
 
 int symbol_table_get(
     const SymbolTable *table,
@@ -109,12 +232,18 @@ int symbol_table_get(
     uint32_t *address
 )
 {
-    if (table == NULL || name == NULL || address == NULL) {
+    if (table == NULL ||
+        name == NULL ||
+        address == NULL) {
         return -1;
     }
 
     for (size_t i = 0; i < table->count; i++) {
         if (strcmp(table->symbols[i].name, name) == 0) {
+            if (!table->symbols[i].defined) {
+                return -1;
+            }
+
             *address = table->symbols[i].address;
             return 0;
         }

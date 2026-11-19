@@ -1,4 +1,3 @@
-
 #ifndef PASS1_H
 #define PASS1_H
 
@@ -15,6 +14,9 @@ typedef struct {
 
     uint32_t data_base;
     uint32_t data_size;
+
+    uint32_t bss_base;
+    uint32_t bss_size;
 } Pass1Layout;
 
 int pass1_run(

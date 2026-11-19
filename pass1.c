@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -11,7 +10,8 @@
 typedef enum {
     SECTION_NONE,
     SECTION_TEXT,
-    SECTION_DATA
+    SECTION_DATA,
+    SECTION_BSS
 } Section;
 
 /* ========================================
@@ -391,6 +391,15 @@ static int scan_text_size(
             continue;
         }
 
+                if (strcmp(mnemonic, ".bss") == 0) {
+            if (parsed_line.operand_count != 0) {
+                return -1;
+            }
+
+            section = SECTION_BSS;
+            continue;
+        }
+
         if (strcmp(mnemonic, ".equ") == 0) {
             if (process_equ_directive(
                     &parsed_line,
@@ -429,6 +438,22 @@ static int scan_text_size(
             fprintf(
                 stderr,
                 "Pass 1 error at line %u: invalid directive in .data\n",
+                line_number
+            );
+
+            return -1;
+        }
+
+        else if (section == SECTION_BSS) {
+            if (strcmp(mnemonic, ".space") == 0 ||
+                strcmp(mnemonic, ".align") == 0) {
+                continue;
+            }
+
+            fprintf(
+                stderr,
+                "Pass 1 error at line %u: "
+                "only .space and .align are supported in .bss\n",
                 line_number
             );
 
@@ -502,6 +527,119 @@ static int scan_text_size(
     return 0;
 }
 
+
+/* ========================================
+   Pass 1 - Data Size Scan
+   Calculate data section size
+   ======================================== */
+
+static int scan_data_size(
+    FILE *source,
+    SymbolTable *symbols,
+    uint32_t data_base,
+    uint32_t *data_size
+)
+{
+    Section section = SECTION_NONE;
+
+    uint32_t data_offset = 0;
+    uint32_t line_number = 0;
+
+    ParsedLine parsed_line;
+
+    while (1) {
+        int status = read_parsed_line(
+            source,
+            &parsed_line,
+            &line_number
+        );
+
+        if (status == 0) {
+            break;
+        }
+
+        if (status < 0) {
+            return -1;
+        }
+
+        const char *mnemonic = parsed_line.mnemonic;
+
+        if (strcmp(mnemonic, ".text") == 0) {
+            if (parsed_line.operand_count != 0) {
+                return -1;
+            }
+
+            section = SECTION_TEXT;
+            continue;
+        }
+
+        if (strcmp(mnemonic, ".data") == 0) {
+            if (parsed_line.operand_count != 0) {
+                return -1;
+            }
+
+            section = SECTION_DATA;
+            continue;
+        }
+
+        if (strcmp(mnemonic, ".bss") == 0) {
+            if (parsed_line.operand_count != 0) {
+                return -1;
+            }
+
+            section = SECTION_BSS;
+            continue;
+        }
+
+        if (mnemonic[0] == '\0' ||
+            strcmp(mnemonic, ".equ") == 0 ||
+            is_global_directive(mnemonic)) {
+            continue;
+        }
+
+        /* Only calculate the .data section here */
+
+        if (section != SECTION_DATA) {
+            continue;
+        }
+
+        uint32_t current_address;
+        uint32_t size;
+
+        if (make_address(
+                data_base,
+                data_offset,
+                &current_address
+            ) != 0) {
+            return -1;
+        }
+
+        if (get_directive_size(
+                &parsed_line,
+                symbols,
+                current_address,
+                &size
+            ) != 1) {
+            fprintf(
+                stderr,
+                "Pass 1 error at line %u: invalid .data directive '%s'\n",
+                line_number,
+                mnemonic
+            );
+
+            return -1;
+        }
+
+        if (add_offset(&data_offset, size) != 0) {
+            return -1;
+        }
+    }
+
+    *data_size = data_offset;
+
+    return 0;
+}
+
 /* ========================================
    Pass 1 - Second Scan
    Register labels and calculate data size
@@ -517,6 +655,7 @@ static int scan_symbols(
 
     uint32_t text_offset = 0;
     uint32_t data_offset = 0;
+    uint32_t bss_offset = 0;
     uint32_t line_number = 0;
 
     ParsedLine parsed_line;
@@ -540,10 +679,13 @@ static int scan_symbols(
 
         /* Register label before processing its instruction */
 
-        if (parsed_line.label[0] != '\0') {
+                if (parsed_line.label[0] != '\0') {
             uint32_t label_address;
+            char symbol_type;
 
             if (section == SECTION_TEXT) {
+                symbol_type = 'T';
+
                 if (make_address(
                         layout->text_base,
                         text_offset,
@@ -553,9 +695,22 @@ static int scan_symbols(
                 }
             }
             else if (section == SECTION_DATA) {
+                symbol_type = 'D';
+
                 if (make_address(
                         layout->data_base,
                         data_offset,
+                        &label_address
+                    ) != 0) {
+                    return -1;
+                }
+            }
+            else if (section == SECTION_BSS) {
+                symbol_type = 'B';
+
+                if (make_address(
+                        layout->bss_base,
+                        bss_offset,
                         &label_address
                     ) != 0) {
                     return -1;
@@ -571,10 +726,11 @@ static int scan_symbols(
                 return -1;
             }
 
-            if (symbol_table_add(
+            if (symbol_table_add_typed(
                     symbols,
                     parsed_line.label,
-                    label_address
+                    label_address,
+                    symbol_type
                 ) != 0) {
                 fprintf(
                     stderr,
@@ -596,10 +752,43 @@ static int scan_symbols(
             section = SECTION_DATA;
             continue;
         }
-
+        if (strcmp(mnemonic, ".bss") == 0) {
+            section = SECTION_BSS;
+            continue;
+        }
         if (strcmp(mnemonic, ".equ") == 0 ||
-            is_global_directive(mnemonic) ||
             mnemonic[0] == '\0') {
+            continue;
+        }
+
+        if (is_global_directive(mnemonic)) {
+            if (parsed_line.operand_count < 1) {
+                fprintf(
+                    stderr,
+                    "Pass 1 error at line %u: invalid global declaration\n",
+                    line_number
+                );
+
+                return -1;
+            }
+
+            for (int i = 0; i < parsed_line.operand_count; i++) {
+                if (symbol_table_declare_global(
+                        symbols,
+                        parsed_line.operands[i]
+                    ) != 0) {
+                    fprintf(
+                        stderr,
+                        "Pass 1 error at line %u: "
+                        "invalid global symbol '%s'\n",
+                        line_number,
+                        parsed_line.operands[i]
+                    );
+
+                    return -1;
+                }
+            }
+
             continue;
         }
 
@@ -677,6 +866,60 @@ static int scan_symbols(
                 return -1;
             }
         }
+        else if (section == SECTION_BSS) {
+            if (strcmp(mnemonic, ".space") != 0 &&
+                strcmp(mnemonic, ".align") != 0) {
+                fprintf(
+                    stderr,
+                    "Pass 1 error at line %u: "
+                    "only .space and .align are supported in .bss\n",
+                    line_number
+                );
+
+                return -1;
+            }
+
+            if (parsed_line.operand_count != 1) {
+                fprintf(
+                    stderr,
+                    "Pass 1 error at line %u: "
+                    "invalid BSS directive\n",
+                    line_number
+                );
+
+                return -1;
+            }
+
+            if (make_address(
+                    layout->bss_base,
+                    bss_offset,
+                    &current_address
+                ) != 0) {
+                return -1;
+            }
+
+            int result = get_directive_size(
+                &parsed_line,
+                symbols,
+                current_address,
+                &size
+            );
+
+            if (result != 1) {
+                fprintf(
+                    stderr,
+                    "Pass 1 error at line %u: invalid BSS directive '%s'\n",
+                    line_number,
+                    mnemonic
+                );
+
+                return -1;
+            }
+
+            if (add_offset(&bss_offset, size) != 0) {
+                return -1;
+            }
+        }
         else {
             fprintf(
                 stderr,
@@ -697,7 +940,18 @@ static int scan_symbols(
         return -1;
     }
 
-    layout->data_size = data_offset;
+    if (data_offset != layout->data_size) {
+        fprintf(
+            stderr,
+            "Pass 1 error: data size mismatch\n"
+        );
+
+        return -1;
+    }
+
+    layout->bss_size = bss_offset;
+
+    return 0;
 
     return 0;
 }
@@ -774,17 +1028,50 @@ int pass1_run(
         goto cleanup;
     }
 
-    /* Data section starts immediately after text section */
+    /* Data section starts at the next 16-byte boundary */
+
+    uint32_t text_end;
 
     if (make_address(
             result_layout.text_base,
             result_layout.text_size,
-            &result_layout.data_base
+            &text_end
+        ) != 0 ||
+        text_end > UINT32_MAX - 15u) {
+        goto cleanup;
+    }
+
+    result_layout.data_base =
+        (text_end + 15u) & ~((uint32_t)0x0Fu);
+
+    /* Second scan: register labels and calculate data size */
+
+    /* Calculate data section size first */
+
+    if (fseek(source, 0, SEEK_SET) != 0) {
+        goto cleanup;
+    }
+
+    if (scan_data_size(
+            source,
+            &work_symbols,
+            result_layout.data_base,
+            &result_layout.data_size
         ) != 0) {
         goto cleanup;
     }
 
-    /* Second scan: register labels and calculate data size */
+    /* BSS starts immediately after the data section */
+
+    if (make_address(
+            result_layout.data_base,
+            result_layout.data_size,
+            &result_layout.bss_base
+        ) != 0) {
+        goto cleanup;
+    }
+
+    /* Second scan: register labels and calculate BSS size */
 
     if (fseek(source, 0, SEEK_SET) != 0) {
         goto cleanup;

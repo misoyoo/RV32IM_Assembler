@@ -70,9 +70,14 @@ int main(void)
 
     printf("Pass 2 SUCCESS!\n\n");
 
-    static const uint8_t expected[] = {
+        static const uint8_t expected[] = {
         /* .text */
         0x13, 0x00, 0x00, 0x00,
+
+        /* 16-byte alignment padding: 12 bytes */
+        0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00,
 
         /* .byte */
         0x12, 0x34,
@@ -108,6 +113,7 @@ int main(void)
     printf("Expected size: %zu bytes\n\n", expected_size);
 
     if (layout.text_size != 4 ||
+        layout.data_base != layout.text_base + 16 ||
         layout.data_size != 17 ||
         result.size != expected_size) {
 

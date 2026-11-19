@@ -43,14 +43,19 @@ int main(int argc, char *argv[])
     printf("Text Size : %u bytes\n", layout.text_size);
     printf("Data Base : 0x%08X\n", layout.data_base);
     printf("Data Size : %u bytes\n", layout.data_size);
+    printf("BSS Base  : 0x%08X\n", layout.bss_base);
+    printf("BSS Size  : %u bytes\n", layout.bss_size);
 
     printf("\n===== Symbol Table =====\n");
 
     for (size_t i = 0; i < symbols.count; i++) {
         printf(
-            "%-20s = 0x%08X\n",
+            "%-20s = 0x%08X | Type: %c | Global: %-3s | Defined: %s\n",
             symbols.symbols[i].name,
-            symbols.symbols[i].address
+            symbols.symbols[i].address,
+            symbols.symbols[i].type,
+            symbols.symbols[i].is_global ? "Yes" : "No",
+            symbols.symbols[i].defined ? "Yes" : "No"
         );
     }
 

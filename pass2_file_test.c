@@ -8,8 +8,11 @@
 
 int main(int argc, char *argv[])
 {
-    if (argc != 3) {
-        printf("Usage: ./pass2_file_test <source_file> <output_file>\n");
+    if (argc != 4) {
+        printf(
+            "Usage: ./pass2_file_test "
+            "<source_file> <binary_file> <listing_file>\n"
+        );
         return 1;
     }
 
@@ -45,6 +48,8 @@ int main(int argc, char *argv[])
     printf("Text Size : %u bytes\n", layout.text_size);
     printf("Data Base : 0x%08X\n", layout.data_base);
     printf("Data Size : %u bytes\n", layout.data_size);
+    printf("BSS Base  : 0x%08X\n", layout.bss_base);
+    printf("BSS Size  : %u bytes\n", layout.bss_size);
 
     printf("\nPass 1 SUCCESS!\n");
 
@@ -63,18 +68,44 @@ int main(int argc, char *argv[])
 
     printf("\nPass 2 SUCCESS!\n");
 
+        uint32_t data_start_offset = layout.text_size;
+
+    if (layout.data_size != 0) {
+        if (layout.data_base < layout.text_base) {
+            printf("Invalid data base address!\n");
+            goto cleanup;
+        }
+
+        data_start_offset = layout.data_base - layout.text_base;
+    }
+
+    uint32_t expected_size =
+        data_start_offset + layout.data_size;
+
     printf("Generated Size : %u bytes\n", result.size);
-    printf("Expected Size  : %u bytes\n",
-           layout.text_size + layout.data_size);
+    printf("Expected Size  : %u bytes\n", expected_size);
 
+    if (result.size != expected_size) {
+        printf("Binary size mismatch!\n");
+        goto cleanup;
+    }
     /* Write binary file */
-
     if (pass2_write_binary(&result, argv[2]) != 0) {
         printf("\nFailed to write binary file!\n");
         goto cleanup;
     }
 
-    printf("\nBinary File: %s\n", argv[2]);
+    if (pass2_write_listing(
+            &result,
+            &symbols,
+            argv[3]
+        ) != 0) {
+        printf("\nFailed to write listing file!\n");
+        goto cleanup;
+    }
+
+    printf("\nBinary File  : %s\n", argv[2]);
+    printf("Listing File : %s\n", argv[3]);
     printf("Assembly SUCCESS!\n");
 
     exit_code = 0;

@@ -9,6 +9,10 @@
 typedef struct {
     char name[SYMBOL_NAME_MAX];
     uint32_t address;
+
+    char type;
+    int is_global;
+    int defined;
 } Symbol;
 
 typedef struct {
@@ -25,6 +29,18 @@ int symbol_table_add(
     SymbolTable *table,
     const char *name,
     uint32_t address
+);
+
+int symbol_table_add_typed(
+    SymbolTable *table,
+    const char *name,
+    uint32_t address,
+    char type
+);
+
+int symbol_table_declare_global(
+    SymbolTable *table,
+    const char *name
 );
 
 int symbol_table_get(

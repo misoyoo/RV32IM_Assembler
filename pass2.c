@@ -1302,9 +1302,17 @@ static int write_instruction(
 static int read_parsed_line(
     FILE *source,
     ParsedLine *parsed_line,
-    uint32_t *line_number
+    uint32_t *line_number,
+    char *source_line
 )
 {
+    if (source == NULL ||
+        parsed_line == NULL ||
+        line_number == NULL ||
+        source_line == NULL) {
+        return -1;
+    }
+
     char buffer[PARSER_MAX_LINE_LENGTH];
 
     if (fgets(buffer, sizeof(buffer), source) == NULL) {
@@ -1327,6 +1335,20 @@ static int read_parsed_line(
         return -1;
     }
 
+    /* Remove newline characters but preserve original formatting */
+
+    while (length > 0 &&
+           (buffer[length - 1] == '\n' ||
+            buffer[length - 1] == '\r')) {
+        buffer[--length] = '\0';
+    }
+
+    /* Preserve original source line */
+
+    memcpy(source_line, buffer, length + 1);
+
+    /* Parse the source line */
+
     if (parse_line(buffer, parsed_line) != 0) {
         fprintf(
             stderr,
@@ -1340,6 +1362,133 @@ static int read_parsed_line(
     return 1;
 }
 
+/* ========================================
+   Append Listing Entry
+   ======================================== */
+
+static int append_listing_entry(
+    Pass2Result *result,
+    uint32_t address,
+    uint32_t machine_code,
+    uint8_t byte_count,
+    const char *source_line
+)
+{
+    if (result == NULL ||
+        source_line == NULL ||
+        byte_count == 0 ||
+        byte_count > 4) {
+        return -1;
+    }
+
+    /* Expand listing array when full */
+
+    if (result->listing_count == result->listing_capacity) {
+        size_t new_capacity;
+
+        if (result->listing_capacity == 0) {
+            new_capacity = 32;
+        }
+        else {
+            new_capacity = result->listing_capacity * 2;
+
+            if (new_capacity < result->listing_capacity) {
+                return -1;
+            }
+        }
+
+        if (new_capacity > (size_t)-1 / sizeof(Pass2ListingEntry)) {
+            return -1;
+        }
+
+        Pass2ListingEntry *new_entries = realloc(
+            result->listing_entries,
+            new_capacity * sizeof(Pass2ListingEntry)
+        );
+
+        if (new_entries == NULL) {
+            return -1;
+        }
+
+        result->listing_entries = new_entries;
+        result->listing_capacity = new_capacity;
+    }
+
+    Pass2ListingEntry *entry =
+        &result->listing_entries[result->listing_count];
+
+    entry->address = address;
+    entry->machine_code = machine_code;
+    entry->byte_count = byte_count;
+
+    int written = snprintf(
+        entry->source_line,
+        sizeof(entry->source_line),
+        "%s",
+        source_line
+    );
+
+    if (written < 0 ||
+        (size_t)written >= sizeof(entry->source_line)) {
+        return -1;
+    }
+
+    result->listing_count++;
+
+    return 0;
+}
+/* ========================================
+   Append Data Listing Entries
+   ======================================== */
+
+static int append_data_listing_entries(
+    Pass2Result *result,
+    uint32_t address,
+    const uint8_t *bytes,
+    uint32_t byte_count,
+    const char *source_line
+)
+{
+    if (result == NULL ||
+        (byte_count > 0 && bytes == NULL) ||
+        source_line == NULL) {
+        return -1;
+    }
+
+    uint32_t offset = 0;
+
+    while (offset < byte_count) {
+        uint32_t chunk_size = byte_count - offset;
+
+        if (chunk_size > 4) {
+            chunk_size = 4;
+        }
+
+        uint32_t machine_code = 0;
+
+        for (uint32_t i = 0; i < chunk_size; i++) {
+            machine_code |=
+                (uint32_t)bytes[offset + i] << (i * 8);
+        }
+
+        const char *entry_source =
+            (offset == 0) ? source_line : "";
+
+        if (append_listing_entry(
+                result,
+                address + offset,
+                machine_code,
+                (uint8_t)chunk_size,
+                entry_source
+            ) != 0) {
+            return -1;
+        }
+
+        offset += chunk_size;
+    }
+
+    return 0;
+}
 /* ========================================
    Data Emission Helpers
    ======================================== */
@@ -1784,11 +1933,25 @@ int pass2_run(
 
     Pass2Result generated = {0};
 
-        if (layout->data_size > UINT32_MAX - layout->text_size) {
-        return -1;
+    uint32_t data_start_offset = layout->text_size;
+
+    if (layout->data_size != 0) {
+        if (layout->data_base < layout->text_base) {
+            return -1;
+        }
+
+        data_start_offset =
+            layout->data_base - layout->text_base;
+
+        if (data_start_offset < layout->text_size ||
+            layout->data_size > UINT32_MAX - data_start_offset) {
+            return -1;
+        }
     }
 
-    generated.size = layout->text_size + layout->data_size;
+    generated.size =
+        data_start_offset + layout->data_size;
+
     generated.base_address = layout->text_base;
 
     generated.bytes = calloc(
@@ -1811,16 +1974,20 @@ int pass2_run(
     uint32_t line_number = 0;
 
     int in_text_section = 0;
+    int in_bss_section = 0;
+    int data_padding_recorded = 0;
     int status;
     int success = 0;
 
     ParsedLine parsed_line;
+    char source_line[PARSER_MAX_LINE_LENGTH];
 
     while (1) {
         status = read_parsed_line(
             source,
             &parsed_line,
-            &line_number
+            &line_number,
+            source_line
         );
 
         if (status == 0) {
@@ -1835,22 +2002,57 @@ int pass2_run(
 
         if (strcmp(mnemonic, ".text") == 0) {
             in_text_section = 1;
+            in_bss_section = 0;
             continue;
         }
 
         if (strcmp(mnemonic, ".data") == 0) {
             in_text_section = 0;
+            in_bss_section = 0;
+
+            if (!data_padding_recorded &&
+                layout->data_size > 0) {
+
+                uint32_t padding_size =
+                    data_start_offset - layout->text_size;
+
+                if (padding_size > 0) {
+                    if (append_data_listing_entries(
+                            &generated,
+                            layout->text_base + layout->text_size,
+                            &generated.bytes[layout->text_size],
+                            padding_size,
+                            "(padding)"
+                        ) != 0) {
+                        goto cleanup;
+                    }
+                }
+            }
+
+            data_padding_recorded = 1;
             continue;
         }
 
-        if (mnemonic[0] == '\0' ||
-            strcmp(mnemonic, ".equ") == 0 ||
+        if (strcmp(mnemonic, ".bss") == 0) {
+            in_text_section = 0;
+            in_bss_section = 1;
+            continue;
+        }
+
+        if (strcmp(mnemonic, ".equ") == 0 ||
             strcmp(mnemonic, ".global") == 0 ||
-            strcmp(mnemonic, ".globl") == 0) {
+            strcmp(mnemonic, ".globl") == 0 ||
+            mnemonic[0] == '\0') {
             continue;
         }
 
-                if (!in_text_section) {
+        /* BSS occupies memory but is not stored in the binary */
+
+        if (in_bss_section) {
+            continue;
+        }
+
+        if (!in_text_section) {
             uint32_t current_address =
                 layout->data_base + data_offset;
 
@@ -1862,7 +2064,7 @@ int pass2_run(
                     current_address,
                     generated.bytes,
                     generated.size,
-                    layout->text_size + data_offset,
+                    data_start_offset + data_offset,
                     &emitted_size
                 ) != 0) {
 
@@ -1874,6 +2076,15 @@ int pass2_run(
                     mnemonic
                 );
 
+                goto cleanup;
+            }
+            if (append_data_listing_entries(
+                    &generated,
+                    current_address,
+                    &generated.bytes[data_start_offset + data_offset],
+                    emitted_size,
+                    source_line
+                ) != 0) {
                 goto cleanup;
             }
 
@@ -1913,6 +2124,19 @@ if (strcmp(mnemonic, ".align") == 0) {
                 generated.size,
                 text_offset + i,
                 0x00000013
+            ) != 0) {
+            goto cleanup;
+        }
+
+        const char *listing_source =
+            (i == 0) ? source_line : "";
+
+        if (append_listing_entry(
+                &generated,
+                current_address + i,
+                0x00000013,
+                4,
+                listing_source
             ) != 0) {
             goto cleanup;
         }
@@ -1969,13 +2193,25 @@ else if (pseudo_result < 0) {
 }
 
 /* Write one or two machine instructions */
-
 for (uint32_t i = 0; i < instruction_count; i++) {
     if (write_instruction(
             generated.bytes,
             generated.size,
             text_offset + i * 4,
             instructions[i]
+        ) != 0) {
+        goto cleanup;
+    }
+
+    const char *listing_source =
+        (i == 0) ? source_line : "";
+
+    if (append_listing_entry(
+            &generated,
+            current_address + i * 4,
+            instructions[i],
+            4,
+            listing_source
         ) != 0) {
         goto cleanup;
     }
@@ -2017,6 +2253,7 @@ cleanup:
 
     if (!success) {
         free(generated.bytes);
+        free(generated.listing_entries);
         return -1;
     }
 
@@ -2036,10 +2273,15 @@ void pass2_destroy(Pass2Result *result)
     }
 
     free(result->bytes);
+    free(result->listing_entries);
 
     result->bytes = NULL;
     result->size = 0;
     result->base_address = 0;
+
+    result->listing_entries = NULL;
+    result->listing_count = 0;
+    result->listing_capacity = 0;
 }
 
 /* ========================================
@@ -2077,4 +2319,90 @@ int pass2_write_binary(
     }
 
     return 0;
+}
+
+
+/* ========================================
+   Write Listing File
+   ======================================== */
+
+int pass2_write_listing(
+    const Pass2Result *result,
+    const SymbolTable *symbols,
+    const char *filename
+)
+{
+    if (result == NULL ||
+        symbols == NULL ||
+        filename == NULL ||
+        (result->listing_count > 0 &&
+         result->listing_entries == NULL) ||
+        (symbols->count > 0 &&
+         symbols->symbols == NULL)) {
+        return -1;
+    }
+
+    FILE *output = fopen(filename, "w");
+
+    if (output == NULL) {
+        return -1;
+    }
+
+    int success = 1;
+
+    /* Machine code and original source */
+
+    for (size_t i = 0; i < result->listing_count; i++) {
+        const Pass2ListingEntry *entry =
+            &result->listing_entries[i];
+
+        if (fprintf(
+                output,
+                "%08X  %08X  %s\n",
+                (unsigned int)entry->address,
+                (unsigned int)entry->machine_code,
+                entry->source_line
+            ) < 0) {
+            success = 0;
+            break;
+        }
+    }
+
+    /* Symbol table */
+
+    if (success) {
+        if (fprintf(output, "\nSYMBOLS\n\n") < 0) {
+            success = 0;
+        }
+    }
+
+    for (size_t i = 0; success && i < symbols->count; i++) {
+        const Symbol *symbol = &symbols->symbols[i];
+
+        char display_type = symbol->type;
+
+        /* Display absolute symbols as '=' */
+
+        if (display_type == 'A') {
+            display_type = '=';
+        }
+
+        if (fprintf(
+                output,
+                "%-16s %08X %c%s\n",
+                symbol->name,
+                (unsigned int)symbol->address,
+                display_type,
+                symbol->is_global ? " G" : ""
+            ) < 0) {
+            success = 0;
+            break;
+        }
+    }
+
+    if (fclose(output) != 0) {
+        success = 0;
+    }
+
+    return success ? 0 : -1;
 }
