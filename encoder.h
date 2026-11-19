@@ -48,4 +48,12 @@ int encode_u_type(
     uint32_t *instruction
 );
 
+// J-type
+int encode_j_type(
+    const char *mnemonic,
+    int rd,
+    int imm,
+    uint32_t *instruction
+);
+
 #endif

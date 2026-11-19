@@ -396,3 +396,49 @@ int encode_u_type(
 
     return 0;
 }
+
+// ========================================
+// J-type
+// ========================================
+
+int encode_j_type(
+    const char *mnemonic,
+    int rd,
+    int imm,
+    uint32_t *instruction
+)
+{
+    if (mnemonic == NULL || instruction == NULL) {
+        return -1;
+    }
+
+    if (rd < 0 || rd > 31) {
+        return -1;
+    }
+
+    if (strcmp(mnemonic, "jal") != 0) {
+        return -1;
+    }
+
+    // Immediate range and alignment check
+    if (imm < -1048576 || imm > 1048574 || imm % 2 != 0) {
+        return -1;
+    }
+
+    uint32_t encoded_imm = (uint32_t)imm & 0x1FFFFF;
+
+    uint32_t imm_20    = (encoded_imm >> 20) & 0x1;
+    uint32_t imm_10_1  = (encoded_imm >> 1)  & 0x3FF;
+    uint32_t imm_11    = (encoded_imm >> 11) & 0x1;
+    uint32_t imm_19_12 = (encoded_imm >> 12) & 0xFF;
+
+    *instruction =
+        (imm_20 << 31) |
+        (imm_10_1 << 21) |
+        (imm_11 << 20) |
+        (imm_19_12 << 12) |
+        ((uint32_t)rd << 7) |
+        0x6F;
+
+    return 0;
+}

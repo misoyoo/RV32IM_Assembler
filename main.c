@@ -108,6 +108,17 @@ int main(void)
     encode_u_type("lui", rd, -1, &instruction);
     printf("lui t0, -1 = 0x%08X\n", instruction);
 
+    printf("\n===== J-type Tests =====\n");
+
+    encode_j_type("jal", rd, 100, &instruction);
+    printf("jal t0, 100 = 0x%08X\n", instruction);
+
+    encode_j_type("jal", 1, 2048, &instruction);
+    printf("jal ra, 2048 = 0x%08X\n", instruction);
+
+    encode_j_type("jal", 0, -4, &instruction);
+    printf("jal x0, -4 = 0x%08X\n", instruction);
+
     return 0;
 }
 
