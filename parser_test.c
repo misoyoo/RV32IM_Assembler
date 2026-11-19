@@ -13,7 +13,8 @@ int main(void)
         ".equ IRQ, (1 << 7)",
         ".asciz \"Hello, world\"",
         "_start:",
-        "# comment only"
+        "# comment only",
+        "count: .word 0"
     };
 
     int test_count = sizeof(test_lines) / sizeof(test_lines[0]);

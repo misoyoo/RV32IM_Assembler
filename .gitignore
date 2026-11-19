@@ -1,0 +1,12 @@
+# macOS
+.DS_Store
+
+# Compiled executables
+/assembler
+/*_test
+/test
+
+# Build artifacts
+*.o
+*.dSYM/
+output/
