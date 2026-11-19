@@ -337,3 +337,62 @@ int encode_b_type(
 
     return 0;
 }
+
+// ========================================
+// U-type
+// ========================================
+
+typedef struct {
+    const char *name;
+    int opcode;
+} UInstruction;
+
+static const UInstruction u_table[] = {
+    {"lui",   0x37},
+    {"auipc", 0x17}
+};
+
+int encode_u_type(
+    const char *mnemonic,
+    int rd,
+    int imm,
+    uint32_t *instruction
+)
+{
+    if (mnemonic == NULL || instruction == NULL) {
+        return -1;
+    }
+
+    if (rd < 0 || rd > 31) {
+        return -1;
+    }
+
+    int opcode = -1;
+
+    int count = sizeof(u_table) / sizeof(u_table[0]);
+
+    for (int i = 0; i < count; i++) {
+        if (strcmp(mnemonic, u_table[i].name) == 0) {
+            opcode = u_table[i].opcode;
+            break;
+        }
+    }
+
+    if (opcode == -1) {
+        return -1;
+    }
+
+    // Immediate range check (20-bit)
+    if (imm < -524288 || imm > 1048575) {
+        return -1;
+    }
+
+    uint32_t encoded_imm = (uint32_t)imm & 0xFFFFF;
+
+    *instruction =
+        (encoded_imm << 12) |
+        ((uint32_t)rd << 7) |
+        (uint32_t)opcode;
+
+    return 0;
+}

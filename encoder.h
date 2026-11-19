@@ -40,4 +40,12 @@ int encode_b_type(
     uint32_t *instruction
 );
 
+// U-type
+int encode_u_type(
+    const char *mnemonic,
+    int rd,
+    int imm,
+    uint32_t *instruction
+);
+
 #endif

@@ -94,6 +94,20 @@ int main(void)
     encode_b_type("beq", rd, t1, -4, &instruction);
     printf("beq t0, t1, -4 = 0x%08X\n", instruction);
 
+    encode_b_type("beq", rd, t1, -4, &instruction);
+    printf("beq t0, t1, -4 = 0x%08X\n", instruction);
+
+    printf("\n===== U-type Tests =====\n");
+
+    encode_u_type("lui", rd, 0x12345, &instruction);
+    printf("lui t0, 0x12345 = 0x%08X\n", instruction);
+
+    encode_u_type("auipc", t1, 0xABCDE, &instruction);
+    printf("auipc t1, 0xABCDE = 0x%08X\n", instruction);
+
+    encode_u_type("lui", rd, -1, &instruction);
+    printf("lui t0, -1 = 0x%08X\n", instruction);
+
     return 0;
 }
 
