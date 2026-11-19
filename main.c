@@ -1,156 +1,211 @@
 
 #include <stdio.h>
-#include <inttypes.h>
+#include <stdint.h>
 
-#include "register.h"
-#include "encoder.h"
+#include "pass1.h"
+#include "pass2.h"
+#include "symbol_table.h"
 
-int main(void)
+int main(int argc, char *argv[])
 {
-    uint32_t instruction;
+    /* Check command-line arguments */
 
-    // 레지스터 번호 변환
-    int rd  = get_register_number("t0");
-    int rs1 = get_register_number("a0");
-    int rs2 = get_register_number("a1");
-    int t1  = get_register_number("t1");
+    if (argc != 4) {
+        printf(
+            "Usage: ./assembler "
+            "<source_file> <binary_file> <listing_file>\n"
+        );
 
-    printf("RV32IM Assembler Start!\n\n");
-
-    // =========================
-    // R-type Tests
-    // =========================
-
-    printf("===== R-type Tests =====\n");
-
-    if (encode_r_type("add", rd, rs1, rs2, &instruction) == 0) {
-        printf("add t0, a0, a1 = 0x%08" PRIX32 "\n", instruction);
+        return 1;
     }
 
-    if (encode_r_type("sub", rd, rs1, rs2, &instruction) == 0) {
-        printf("sub t0, a0, a1 = 0x%08" PRIX32 "\n", instruction);
+    /* Open assembly source file */
+
+    FILE *source = fopen(argv[1], "r");
+
+    if (source == NULL) {
+        perror("Failed to open source file");
+        return 1;
     }
 
-    if (encode_r_type("mul", rd, rs1, rs2, &instruction) == 0) {
-        printf("mul t0, a0, a1 = 0x%08" PRIX32 "\n", instruction);
+    SymbolTable symbols;
+    Pass1Layout layout = {0};
+    Pass2Result result = {0};
+
+    if (symbol_table_init(&symbols) != 0) {
+        fclose(source);
+        return 1;
     }
 
-    // =========================
-    // I-type Tests
-    // =========================
+    int exit_code = 1;
 
-    printf("\n===== I-type Tests =====\n");
+    printf("========================================\n");
+    printf("       RV32IM TWO-PASS ASSEMBLER\n");
+    printf("========================================\n\n");
 
-    if (encode_i_type("addi", rd, t1, 10, &instruction) == 0) {
-        printf("addi t0, t1, 10 = 0x%08" PRIX32 "\n", instruction);
+    printf("Source File : %s\n", argv[1]);
+    printf("Binary File : %s\n", argv[2]);
+    printf("Listing File: %s\n\n", argv[3]);
+
+    /* ========================================
+       Pass 1: Address Assignment
+       ======================================== */
+
+    printf("[Pass 1] Address Assignment...\n");
+
+    if (pass1_run(
+            source,
+            &symbols,
+            &layout
+        ) != 0) {
+
+        printf("Pass 1 FAILED!\n");
+        goto cleanup;
     }
 
-    if (encode_i_type("addi", rd, t1, -1, &instruction) == 0) {
-        printf("addi t0, t1, -1 = 0x%08" PRIX32 "\n", instruction);
+    printf("Pass 1 SUCCESS!\n\n");
+
+    /* Display section layout */
+
+    printf("===== Section Layout =====\n");
+
+    printf(
+        "Text Base : 0x%08X\n",
+        layout.text_base
+    );
+
+    printf(
+        "Text Size : %u bytes\n",
+        layout.text_size
+    );
+
+    printf(
+        "Data Base : 0x%08X\n",
+        layout.data_base
+    );
+
+    printf(
+        "Data Size : %u bytes\n",
+        layout.data_size
+    );
+
+    printf(
+        "BSS Base  : 0x%08X\n",
+        layout.bss_base
+    );
+
+    printf(
+        "BSS Size  : %u bytes\n",
+        layout.bss_size
+    );
+
+    /* ========================================
+       Pass 2: Machine Code Generation
+       ======================================== */
+
+    printf("\n[Pass 2] Machine Code Generation...\n");
+
+    if (pass2_run(
+            source,
+            &symbols,
+            &layout,
+            &result
+        ) != 0) {
+
+        printf("Pass 2 FAILED!\n");
+        goto cleanup;
     }
 
-    if (encode_i_type("lw", rd, rs1, 8, &instruction) == 0) {
-        printf("lw t0, 8(a0) = 0x%08" PRIX32 "\n", instruction);
+    printf("Pass 2 SUCCESS!\n");
+
+    /* ========================================
+       Validate Binary Size
+       ======================================== */
+
+    uint32_t data_start_offset = layout.text_size;
+
+    if (layout.data_size != 0) {
+        if (layout.data_base < layout.text_base) {
+            printf("Invalid data base address!\n");
+            goto cleanup;
+        }
+
+        data_start_offset =
+            layout.data_base - layout.text_base;
     }
 
-    if (encode_i_type("srai", rd, t1, 3, &instruction) == 0) {
-        printf("srai t0, t1, 3 = 0x%08" PRIX32 "\n", instruction);
+    if (layout.data_size >
+        UINT32_MAX - data_start_offset) {
+
+        printf("Binary size overflow!\n");
+        goto cleanup;
     }
 
-    printf("\n===== S-type Tests =====\n");
+    uint32_t expected_size =
+        data_start_offset + layout.data_size;
 
-    encode_s_type("sb", 2, 5, 8, &instruction);
-    printf("sb t0, 8(sp) = 0x%08X\n", instruction);
+    printf("\n===== Binary Validation =====\n");
 
-    encode_s_type("sh", 2, 5, 8, &instruction);
-    printf("sh t0, 8(sp) = 0x%08X\n", instruction);
+    printf(
+        "Generated Size : %u bytes\n",
+        result.size
+    );
 
-    encode_s_type("sw", 2, 5, 8, &instruction);
-    printf("sw t0, 8(sp) = 0x%08X\n", instruction);
+    printf(
+        "Expected Size  : %u bytes\n",
+        expected_size
+    );
 
-    encode_s_type("sw", 2, 5, -8, &instruction);
-    printf("sw t0, -8(sp) = 0x%08X\n", instruction);
-
-    printf("\n===== B-type Tests =====\n");
-
-    encode_b_type("beq", rd, t1, 16, &instruction);
-    printf("beq t0, t1, 16 = 0x%08X\n", instruction);
-
-    encode_b_type("bne", rd, t1, 16, &instruction);
-    printf("bne t0, t1, 16 = 0x%08X\n", instruction);
-
-    encode_b_type("blt", rd, t1, 16, &instruction);
-    printf("blt t0, t1, 16 = 0x%08X\n", instruction);
-
-    encode_b_type("bge", rd, t1, 16, &instruction);
-    printf("bge t0, t1, 16 = 0x%08X\n", instruction);
-
-    encode_b_type("bltu", rd, t1, 16, &instruction);
-    printf("bltu t0, t1, 16 = 0x%08X\n", instruction);
-
-    encode_b_type("bgeu", rd, t1, 16, &instruction);
-    printf("bgeu t0, t1, 16 = 0x%08X\n", instruction);
-
-    encode_b_type("beq", rd, t1, -4, &instruction);
-    printf("beq t0, t1, -4 = 0x%08X\n", instruction);
-
-    encode_b_type("beq", rd, t1, -4, &instruction);
-    printf("beq t0, t1, -4 = 0x%08X\n", instruction);
-
-    printf("\n===== U-type Tests =====\n");
-
-    encode_u_type("lui", rd, 0x12345, &instruction);
-    printf("lui t0, 0x12345 = 0x%08X\n", instruction);
-
-    encode_u_type("auipc", t1, 0xABCDE, &instruction);
-    printf("auipc t1, 0xABCDE = 0x%08X\n", instruction);
-
-    encode_u_type("lui", rd, -1, &instruction);
-    printf("lui t0, -1 = 0x%08X\n", instruction);
-
-    printf("\n===== J-type Tests =====\n");
-
-    encode_j_type("jal", rd, 100, &instruction);
-    printf("jal t0, 100 = 0x%08X\n", instruction);
-
-    encode_j_type("jal", 1, 2048, &instruction);
-    printf("jal ra, 2048 = 0x%08X\n", instruction);
-
-    encode_j_type("jal", 0, -4, &instruction);
-    printf("jal x0, -4 = 0x%08X\n", instruction);
-
-    // ========================================
-    // CSR-type test
-    // ========================================
-
-    printf("\n===== CSR-type Test =====\n");
-
-    if (encode_csr_type("csrw", 0, "mtvec", 5, &instruction) == 0) {
-        printf("csrw mtvec, t0 = 0x%08X\n", instruction);
+    if (result.size != expected_size) {
+        printf("Binary size mismatch!\n");
+        goto cleanup;
     }
 
-    if (encode_csr_type("csrs", 0, "mie", 5, &instruction) == 0) {
-        printf("csrs mie, t0 = 0x%08X\n", instruction);
+    printf("Binary Validation SUCCESS!\n");
+
+    /* ========================================
+       Generate Listing File
+       ======================================== */
+
+    if (pass2_write_listing(
+            &result,
+            &symbols,
+            argv[3]
+        ) != 0) {
+
+        printf("\nFailed to write listing file!\n");
+        goto cleanup;
     }
 
-    if (encode_csr_type("csrsi", 0, "mstatus", 8, &instruction) == 0) {
-        printf("csrsi mstatus, 8 = 0x%08X\n", instruction);
+    /* ========================================
+       Generate Binary File
+       ======================================== */
+
+    if (pass2_write_binary(
+            &result,
+            argv[2]
+        ) != 0) {
+
+        printf("\nFailed to write binary file!\n");
+        goto cleanup;
     }
 
-    if (encode_csr_type("csrr", 5, "mcause", 0, &instruction) == 0) {
-        printf("csrr t0, mcause = 0x%08X\n", instruction);
-    }
+    printf("\n===== Assembly Results =====\n");
 
-    // ========================================
-    // System-type test
-    // ========================================
+    printf("Binary File  : %s\n", argv[2]);
+    printf("Listing File : %s\n", argv[3]);
 
-    printf("\n===== System-type Test =====\n");
+    printf("\n========================================\n");
+    printf("          ASSEMBLY SUCCESS!\n");
+    printf("========================================\n");
 
-    if (encode_system_type("mret", &instruction) == 0) {
-        printf("mret = 0x%08X\n", instruction);
-    }
+    exit_code = 0;
 
-    return 0;
+cleanup:
+
+    pass2_destroy(&result);
+    symbol_table_destroy(&symbols);
+    fclose(source);
+
+    return exit_code;
 }
-
