@@ -70,7 +70,30 @@ int main(void)
 
     encode_s_type("sw", 2, 5, -8, &instruction);
     printf("sw t0, -8(sp) = 0x%08X\n", instruction);
-    
+
+    printf("\n===== B-type Tests =====\n");
+
+    encode_b_type("beq", rd, t1, 16, &instruction);
+    printf("beq t0, t1, 16 = 0x%08X\n", instruction);
+
+    encode_b_type("bne", rd, t1, 16, &instruction);
+    printf("bne t0, t1, 16 = 0x%08X\n", instruction);
+
+    encode_b_type("blt", rd, t1, 16, &instruction);
+    printf("blt t0, t1, 16 = 0x%08X\n", instruction);
+
+    encode_b_type("bge", rd, t1, 16, &instruction);
+    printf("bge t0, t1, 16 = 0x%08X\n", instruction);
+
+    encode_b_type("bltu", rd, t1, 16, &instruction);
+    printf("bltu t0, t1, 16 = 0x%08X\n", instruction);
+
+    encode_b_type("bgeu", rd, t1, 16, &instruction);
+    printf("bgeu t0, t1, 16 = 0x%08X\n", instruction);
+
+    encode_b_type("beq", rd, t1, -4, &instruction);
+    printf("beq t0, t1, -4 = 0x%08X\n", instruction);
+
     return 0;
 }
 

@@ -263,3 +263,77 @@ int encode_s_type(
     return 0;
 }
 
+// ========================================
+// B-type
+// ========================================
+
+typedef struct {
+    const char *name;
+    int funct3;
+} BInstruction;
+
+static const BInstruction b_table[] = {
+    {"beq",  0b000},
+    {"bne",  0b001},
+    {"blt",  0b100},
+    {"bge",  0b101},
+    {"bltu", 0b110},
+    {"bgeu", 0b111}
+};
+
+int encode_b_type(
+    const char *mnemonic,
+    int rs1,
+    int rs2,
+    int imm,
+    uint32_t *instruction
+)
+{
+    if (mnemonic == NULL || instruction == NULL) {
+        return -1;
+    }
+
+    if (rs1 < 0 || rs1 > 31 ||
+        rs2 < 0 || rs2 > 31) {
+        return -1;
+    }
+
+    int funct3 = -1;
+
+    int count = sizeof(b_table) / sizeof(b_table[0]);
+
+    for (int i = 0; i < count; i++) {
+        if (strcmp(mnemonic, b_table[i].name) == 0) {
+            funct3 = b_table[i].funct3;
+            break;
+        }
+    }
+
+    if (funct3 == -1) {
+        return -1;
+    }
+
+    // Immediate range and alignment check
+    if (imm < -4096 || imm > 4094 || imm % 2 != 0) {
+        return -1;
+    }
+
+    uint32_t encoded_imm = (uint32_t)imm & 0x1FFF;
+
+    uint32_t imm_12   = (encoded_imm >> 12) & 0x1;
+    uint32_t imm_10_5 = (encoded_imm >> 5)  & 0x3F;
+    uint32_t imm_4_1  = (encoded_imm >> 1)  & 0xF;
+    uint32_t imm_11   = (encoded_imm >> 11) & 0x1;
+
+    *instruction =
+        (imm_12 << 31) |
+        (imm_10_5 << 25) |
+        ((uint32_t)rs2 << 20) |
+        ((uint32_t)rs1 << 15) |
+        ((uint32_t)funct3 << 12) |
+        (imm_4_1 << 8) |
+        (imm_11 << 7) |
+        0x63;
+
+    return 0;
+}

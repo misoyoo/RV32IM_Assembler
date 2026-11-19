@@ -31,4 +31,13 @@ int encode_s_type(
     uint32_t *instruction
 );
 
+// B-type
+int encode_b_type(
+    const char *mnemonic,
+    int rs1,
+    int rs2,
+    int imm,
+    uint32_t *instruction
+);
+
 #endif
