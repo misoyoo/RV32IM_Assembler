@@ -119,6 +119,38 @@ int main(void)
     encode_j_type("jal", 0, -4, &instruction);
     printf("jal x0, -4 = 0x%08X\n", instruction);
 
+    // ========================================
+    // CSR-type test
+    // ========================================
+
+    printf("\n===== CSR-type Test =====\n");
+
+    if (encode_csr_type("csrw", 0, "mtvec", 5, &instruction) == 0) {
+        printf("csrw mtvec, t0 = 0x%08X\n", instruction);
+    }
+
+    if (encode_csr_type("csrs", 0, "mie", 5, &instruction) == 0) {
+        printf("csrs mie, t0 = 0x%08X\n", instruction);
+    }
+
+    if (encode_csr_type("csrsi", 0, "mstatus", 8, &instruction) == 0) {
+        printf("csrsi mstatus, 8 = 0x%08X\n", instruction);
+    }
+
+    if (encode_csr_type("csrr", 5, "mcause", 0, &instruction) == 0) {
+        printf("csrr t0, mcause = 0x%08X\n", instruction);
+    }
+
+    // ========================================
+    // System-type test
+    // ========================================
+
+    printf("\n===== System-type Test =====\n");
+
+    if (encode_system_type("mret", &instruction) == 0) {
+        printf("mret = 0x%08X\n", instruction);
+    }
+
     return 0;
 }
 

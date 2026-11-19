@@ -442,3 +442,165 @@ int encode_j_type(
 
     return 0;
 }
+
+// ========================================
+// CSR-type
+// ========================================
+
+typedef struct {
+    const char *name;
+    int address;
+} CSR;
+
+static const CSR csr_table[] = {
+    {"mstatus",    0x300},
+    {"misa",       0x301},
+    {"medeleg",    0x302},
+    {"mideleg",    0x303},
+    {"mie",        0x304},
+    {"mtvec",      0x305},
+    {"mcounteren", 0x306},
+    {"mscratch",   0x340},
+    {"mepc",       0x341},
+    {"mcause",     0x342},
+    {"mtval",      0x343},
+    {"mip",        0x344},
+    {"cycle",      0xC00},
+    {"time",       0xC01},
+    {"instret",    0xC02}
+};
+
+static int get_csr_address(const char *name)
+{
+    if (name == NULL) {
+        return -1;
+    }
+
+    int count = sizeof(csr_table) / sizeof(csr_table[0]);
+
+    for (int i = 0; i < count; i++) {
+        if (strcmp(name, csr_table[i].name) == 0) {
+            return csr_table[i].address;
+        }
+    }
+
+    return -1;
+}
+
+int encode_csr_type(
+    const char *mnemonic,
+    int rd,
+    const char *csr_name,
+    int rs1,
+    uint32_t *instruction
+)
+{
+    if (mnemonic == NULL || csr_name == NULL || instruction == NULL) {
+        return -1;
+    }
+
+    int csr = get_csr_address(csr_name);
+
+    if (csr < 0) {
+        return -1;
+    }
+
+    if (rd < 0 || rd > 31) {
+        return -1;
+    }
+
+    int funct3;
+
+    if (strcmp(mnemonic, "csrrw") == 0 ||
+        strcmp(mnemonic, "csrw") == 0) {
+        funct3 = 0b001;
+    }
+    else if (strcmp(mnemonic, "csrrs") == 0 ||
+             strcmp(mnemonic, "csrs") == 0 ||
+             strcmp(mnemonic, "csrr") == 0) {
+        funct3 = 0b010;
+    }
+    else if (strcmp(mnemonic, "csrrc") == 0 ||
+             strcmp(mnemonic, "csrc") == 0) {
+        funct3 = 0b011;
+    }
+    else if (strcmp(mnemonic, "csrrwi") == 0 ||
+             strcmp(mnemonic, "csrwi") == 0) {
+        funct3 = 0b101;
+    }
+    else if (strcmp(mnemonic, "csrrsi") == 0 ||
+             strcmp(mnemonic, "csrsi") == 0) {
+        funct3 = 0b110;
+    }
+    else if (strcmp(mnemonic, "csrrci") == 0 ||
+             strcmp(mnemonic, "csrci") == 0) {
+        funct3 = 0b111;
+    }
+    else {
+        return -1;
+    }
+
+    // Pseudo-instruction operand handling
+    if (strcmp(mnemonic, "csrw") == 0 ||
+        strcmp(mnemonic, "csrs") == 0 ||
+        strcmp(mnemonic, "csrc") == 0 ||
+        strcmp(mnemonic, "csrwi") == 0 ||
+        strcmp(mnemonic, "csrsi") == 0 ||
+        strcmp(mnemonic, "csrci") == 0) {
+        rd = 0;
+    }
+
+    if (strcmp(mnemonic, "csrr") == 0) {
+        rs1 = 0;
+    }
+
+    // Immediate CSR instructions use a 5-bit zimm
+    if (funct3 >= 0b101) {
+        if (rs1 < 0 || rs1 > 31) {
+            return -1;
+        }
+    }
+    else {
+        if (rs1 < 0 || rs1 > 31) {
+            return -1;
+        }
+    }
+
+    *instruction =
+        ((uint32_t)csr << 20) |
+        ((uint32_t)rs1 << 15) |
+        ((uint32_t)funct3 << 12) |
+        ((uint32_t)rd << 7) |
+        0x73;
+
+    return 0;
+}
+
+// ========================================
+// System-type
+// ========================================
+
+int encode_system_type(
+    const char *mnemonic,
+    uint32_t *instruction
+)
+{
+    if (mnemonic == NULL || instruction == NULL) {
+        return -1;
+    }
+
+    if (strcmp(mnemonic, "mret") == 0) {
+        *instruction = 0x30200073;
+    }
+    else if (strcmp(mnemonic, "ecall") == 0) {
+        *instruction = 0x00000073;
+    }
+    else if (strcmp(mnemonic, "ebreak") == 0) {
+        *instruction = 0x00100073;
+    }
+    else {
+        return -1;
+    }
+
+    return 0;
+}
