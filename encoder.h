@@ -22,4 +22,13 @@ int encode_i_type(
     uint32_t *instruction
 );
 
+// S-type
+int encode_s_type(
+    const char *mnemonic,
+    int rs1,
+    int rs2,
+    int imm,
+    uint32_t *instruction
+);
+
 #endif

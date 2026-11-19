@@ -57,6 +57,20 @@ int main(void)
         printf("srai t0, t1, 3 = 0x%08" PRIX32 "\n", instruction);
     }
 
+    printf("\n===== S-type Tests =====\n");
+
+    encode_s_type("sb", 2, 5, 8, &instruction);
+    printf("sb t0, 8(sp) = 0x%08X\n", instruction);
+
+    encode_s_type("sh", 2, 5, 8, &instruction);
+    printf("sh t0, 8(sp) = 0x%08X\n", instruction);
+
+    encode_s_type("sw", 2, 5, 8, &instruction);
+    printf("sw t0, 8(sp) = 0x%08X\n", instruction);
+
+    encode_s_type("sw", 2, 5, -8, &instruction);
+    printf("sw t0, -8(sp) = 0x%08X\n", instruction);
+    
     return 0;
 }
 

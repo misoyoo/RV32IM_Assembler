@@ -194,4 +194,72 @@ int encode_i_type(
     return 0;
 }
 
+// ========================================
+// S-type
+// ========================================
+
+typedef struct {
+    const char *name;
+    int funct3;
+} SInstruction;
+
+static const SInstruction s_table[] = {
+    {"sb", 0b000},
+    {"sh", 0b001},
+    {"sw", 0b010}
+};
+
+int encode_s_type(
+    const char *mnemonic,
+    int rs1,
+    int rs2,
+    int imm,
+    uint32_t *instruction
+)
+{
+    if (mnemonic == NULL || instruction == NULL) {
+        return -1;
+    }
+
+    if (rs1 < 0 || rs1 > 31 ||
+        rs2 < 0 || rs2 > 31) {
+        return -1;
+    }
+
+    int funct3 = -1;
+
+    int count = sizeof(s_table) / sizeof(s_table[0]);
+
+    for (int i = 0; i < count; i++) {
+        if (strcmp(mnemonic, s_table[i].name) == 0) {
+            funct3 = s_table[i].funct3;
+            break;
+        }
+    }
+
+    if (funct3 == -1) {
+        return -1;
+    }
+
+    // Immediate range check
+    if (imm < -2048 || imm > 2047) {
+        return -1;
+    }
+
+    // Split immediate into two parts
+    uint32_t encoded_imm = (uint32_t)imm & 0xFFF;
+
+    uint32_t imm_11_5 = (encoded_imm >> 5) & 0x7F;
+    uint32_t imm_4_0  = encoded_imm & 0x1F;
+
+    *instruction =
+        (imm_11_5 << 25) |
+        ((uint32_t)rs2 << 20) |
+        ((uint32_t)rs1 << 15) |
+        ((uint32_t)funct3 << 12) |
+        (imm_4_0 << 7) |
+        0x23;
+
+    return 0;
+}
 
