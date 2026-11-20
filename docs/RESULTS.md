@@ -11,7 +11,7 @@
 5. Listing 첫 명령어 주소와 섹션 배치 확인
 6. BSS 전용 예제 검증
 7. 잘못된 입력에 대한 오류 처리 검증
-8. CPUlator RISC-V DE10-Lite 시뮬레이터에서 예제 1~4 실행
+8. CPUlator RISC-V DE10-Lite 시뮬레이터에서 예제 실행
 
 CPUlator 검증은 실제 DE10-Lite 보드가 아닌 웹 기반 시뮬레이터에서 수행했다.
 
