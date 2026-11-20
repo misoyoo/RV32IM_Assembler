@@ -585,18 +585,29 @@ int encode_system_type(
     uint32_t *instruction
 )
 {
-    if (mnemonic == NULL || instruction == NULL) {
-        return -1;
-    }
-
     if (strcmp(mnemonic, "mret") == 0) {
         *instruction = 0x30200073;
+    }
+    else if (strcmp(mnemonic, "sret") == 0) {
+        *instruction = 0x10200073;
+    }
+    else if (strcmp(mnemonic, "uret") == 0) {
+        *instruction = 0x00200073;
     }
     else if (strcmp(mnemonic, "ecall") == 0) {
         *instruction = 0x00000073;
     }
     else if (strcmp(mnemonic, "ebreak") == 0) {
         *instruction = 0x00100073;
+    }
+    else if (strcmp(mnemonic, "wfi") == 0) {
+        *instruction = 0x10500073;
+    }
+    else if (strcmp(mnemonic, "fence") == 0) {
+        *instruction = 0x0FF0000F;
+    }
+    else if (strcmp(mnemonic, "fence.i") == 0) {
+        *instruction = 0x0000100F;
     }
     else {
         return -1;

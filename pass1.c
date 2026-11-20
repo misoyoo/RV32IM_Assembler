@@ -219,10 +219,16 @@ static int get_instruction_size(
         return 0;
     }
 
-    /* call and tail: two instructions */
+    /* call: jal ra, label */
 
-    if (strcmp(mnemonic, "call") == 0 ||
-        strcmp(mnemonic, "tail") == 0) {
+    if (strcmp(mnemonic, "call") == 0) {
+        *size = 4;
+        return 0;
+    }
+
+    /* tail: auipc + jalr */
+
+    if (strcmp(mnemonic, "tail") == 0) {
         *size = 8;
         return 0;
     }
@@ -350,7 +356,7 @@ static int scan_text_size(
     uint32_t *text_size
 )
 {
-    Section section = SECTION_NONE;
+    Section section = SECTION_TEXT;
     uint32_t text_offset = 0;
     uint32_t line_number = 0;
 
@@ -651,7 +657,7 @@ static int scan_symbols(
     Pass1Layout *layout
 )
 {
-    Section section = SECTION_NONE;
+    Section section = SECTION_TEXT;
 
     uint32_t text_offset = 0;
     uint32_t data_offset = 0;
@@ -995,15 +1001,39 @@ int pass1_run(
         return -1;
     }
 
-    if (symbol_table_add(
+    if (symbol_table_add_typed(
+        &work_symbols,
+        "TEXT_START",
+        DEFAULT_TEXT_BASE,
+        'A'
+    ) != 0 ||
+    symbol_table_add_typed(
+        &work_symbols,
+        "_data_start",
+        DEFAULT_TEXT_BASE,
+        'D'
+    ) != 0 ||
+    symbol_table_add_typed(
+        &work_symbols,
+        "_bss_start",
+        DEFAULT_TEXT_BASE,
+        'B'
+    ) != 0 ||
+    symbol_table_add_typed(
+        &work_symbols,
+        "_bss_end",
+        DEFAULT_TEXT_BASE,
+        'B'
+    ) != 0 ||
+    symbol_table_add(
         &work_symbols,
         "_stack_top",
-        0x04000000u
+        0x00040000u
     ) != 0) {
 
-        symbol_table_destroy(&work_symbols);
-        return -1;
-    }
+    symbol_table_destroy(&work_symbols);
+    return -1;
+}
 
     Pass1Layout result_layout = {
         .text_base = DEFAULT_TEXT_BASE,
@@ -1044,6 +1074,14 @@ int pass1_run(
     result_layout.data_base =
         (text_end + 15u) & ~((uint32_t)0x0Fu);
 
+    if (symbol_table_update_address(
+        &work_symbols,
+        "_data_start",
+        result_layout.data_base
+        ) != 0) {
+        goto cleanup;
+    }
+
     /* Second scan: register labels and calculate data size */
 
     /* Calculate data section size first */
@@ -1061,12 +1099,26 @@ int pass1_run(
         goto cleanup;
     }
 
-    /* BSS starts immediately after the data section */
+    /* BSS starts at the next 16-byte boundary after data */
+
+    uint32_t data_end;
 
     if (make_address(
             result_layout.data_base,
             result_layout.data_size,
-            &result_layout.bss_base
+            &data_end
+        ) != 0 ||
+        data_end > UINT32_MAX - 15u) {
+        goto cleanup;
+    }
+
+    result_layout.bss_base =
+        (data_end + 15u) & ~((uint32_t)0x0Fu);
+
+    if (symbol_table_update_address(
+            &work_symbols,
+            "_bss_start",
+            result_layout.bss_base
         ) != 0) {
         goto cleanup;
     }
@@ -1081,6 +1133,21 @@ int pass1_run(
             source,
             &work_symbols,
             &result_layout
+        ) != 0) {
+        goto cleanup;
+    }
+
+    uint32_t bss_end;
+
+    if (make_address(
+            result_layout.bss_base,
+            result_layout.bss_size,
+            &bss_end
+        ) != 0 ||
+        symbol_table_update_address(
+            &work_symbols,
+            "_bss_end",
+            bss_end
         ) != 0) {
         goto cleanup;
     }

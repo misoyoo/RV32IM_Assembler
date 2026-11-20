@@ -102,9 +102,9 @@ int main(void)
             0
         },
         {
-            "Instruction outside section",
+            "Implicit default text section",
             "    nop\n",
-            0
+            1
         }
     };
 

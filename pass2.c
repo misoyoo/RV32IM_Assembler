@@ -547,11 +547,11 @@ static int encode_base_instruction(
     if (strcmp(mnemonic, "jal") == 0) {
         const char *target_operand;
 
-        if (parsed_line->operand_count == 1) {
-            /* Default destination register: ra (x1) */
-            rd = 1;
-            target_operand = parsed_line->operands[0];
-        }
+    if (parsed_line->operand_count == 1) {
+        /* Default destination register: ra (x1) */
+        rd = 1;
+        target_operand = parsed_line->operands[0];
+    }
         else if (parsed_line->operand_count == 2) {
             if (get_register(
                     parsed_line->operands[0],
@@ -634,8 +634,13 @@ static int encode_base_instruction(
     /* System instructions */
 
     if (strcmp(mnemonic, "mret") == 0 ||
+        strcmp(mnemonic, "sret") == 0 ||
+        strcmp(mnemonic, "uret") == 0 ||
         strcmp(mnemonic, "ecall") == 0 ||
-        strcmp(mnemonic, "ebreak") == 0) {
+        strcmp(mnemonic, "ebreak") == 0 ||
+        strcmp(mnemonic, "wfi") == 0 ||
+        strcmp(mnemonic, "fence") == 0 ||
+        strcmp(mnemonic, "fence.i") == 0) {
 
         if (parsed_line->operand_count != 0) {
             return -1;
@@ -957,11 +962,35 @@ static int encode_pseudo_instruction(
         return 1;
     }
 
-    /* call / tail: auipc + jalr */
+    /* call: jal ra, target */
 
-    if (strcmp(mnemonic, "call") == 0 ||
-        strcmp(mnemonic, "tail") == 0) {
+    if (strcmp(mnemonic, "call") == 0) {
+        if (parsed_line->operand_count != 1 ||
+            get_pc_relative_offset(
+                parsed_line->operands[0],
+                symbols,
+                current_address,
+                &immediate
+            ) != 0) {
+            return -1;
+        }
 
+        if (encode_j_type(
+                "jal",
+                1,
+                immediate,
+                &instructions[0]
+            ) != 0) {
+            return -1;
+        }
+
+        *instruction_count = 1;
+        return 1;
+    }
+
+    /* tail: auipc + jalr */
+
+    if (strcmp(mnemonic, "tail") == 0) {
         if (parsed_line->operand_count != 1 ||
             get_pc_relative_offset(
                 parsed_line->operands[0],
@@ -983,22 +1012,16 @@ static int encode_pseudo_instruction(
             return -1;
         }
 
-        int link_register =
-            strcmp(mnemonic, "call") == 0 ? 1 : 0;
-
-        int temporary_register =
-            strcmp(mnemonic, "call") == 0 ? 1 : 6;
-
         if (encode_u_type(
                 "auipc",
-                temporary_register,
+                6,
                 upper,
                 &instructions[0]
             ) != 0 ||
             encode_i_type(
                 "jalr",
-                link_register,
-                temporary_register,
+                0,
+                6,
                 lower,
                 &instructions[1]
             ) != 0) {
@@ -1973,7 +1996,7 @@ int pass2_run(
     uint32_t data_offset = 0;
     uint32_t line_number = 0;
 
-    int in_text_section = 0;
+    int in_text_section = 1;
     int in_bss_section = 0;
     int data_padding_recorded = 0;
     int status;

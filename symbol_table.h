@@ -30,7 +30,11 @@ int symbol_table_add(
     const char *name,
     uint32_t address
 );
-
+int symbol_table_update_address(
+    SymbolTable *table,
+    const char *name,
+    uint32_t address
+);
 int symbol_table_add_typed(
     SymbolTable *table,
     const char *name,

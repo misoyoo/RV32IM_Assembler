@@ -180,6 +180,26 @@ int symbol_table_add(
         'A'
     );
 }
+int symbol_table_update_address(
+    SymbolTable *table,
+    const char *name,
+    uint32_t address
+)
+{
+    if (table == NULL || name == NULL) {
+        return -1;
+    }
+
+    Symbol *symbol = find_symbol(table, name);
+
+    if (symbol == NULL || !symbol->defined) {
+        return -1;
+    }
+
+    symbol->address = address;
+
+    return 0;
+}
 
 /* ========================================
    Declare Global Symbol
