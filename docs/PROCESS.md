@@ -117,10 +117,16 @@ data_base = align_up(text_base + text_size, 16)
 BSS 시작 주소는 Data 영역 바로 뒤에서 시작한다.
 
 ```text
-bss_base = data_base + data_size
+bss_base = align_up(data_base + data_size, 16)
+bss_end = bss_base + bss_size
 ```
 
-BSS 시작 주소 자체를 별도로 16바이트 정렬하지는 않는다. BSS 내부 정렬이 필요한 경우 `.align`을 사용한다.
+Data 시작 주소는 Text 영역의 끝 주소를 16바이트 경계로 정렬하여 계산한다.
+
+data_base = align_up(text_base + text_size, 16)
+
+BSS 시작 주소도 Data 영역의 끝 주소를 기준으로
+다음 16바이트 경계에 맞춰 계산한다.
 
 현재 BSS에서 지원하는 크기 지시어는 `.space`와 `.align`이다.
 
@@ -189,6 +195,5 @@ Pass 1에서 검출할 수 있는 명령어 및 섹션 오류는 Pass 1에서 �
 - 출력은 little-endian Raw Binary와 Listing이다.
 - ELF 생성, 링킹 및 relocation 기능은 포함하지 않는다.
 - BSS는 주소와 크기 및 심볼 정보로 관리하며 초기화 바이너리 바이트를 생성하지 않는다.
-- BSS 시작 주소 자체를 자동으로 별도 정렬하지 않는다.
 - BSS에서는 `.space`, `.align`만 지원한다.
 - 모든 인코딩 오류에 대해 operand별 상세 진단 메시지를 출력하지는 않는다.
