@@ -1,6 +1,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include "encoder.h"
 
 #define R_OPCODE 0x33
@@ -467,12 +468,13 @@ static const CSR csr_table[] = {
     {"mip",        0x344},
     {"cycle",      0xC00},
     {"time",       0xC01},
-    {"instret",    0xC02}
+    {"instret",    0xC02},
+    {"mhartid",    0xF14}
 };
 
 static int get_csr_address(const char *name)
 {
-    if (name == NULL) {
+    if (name == NULL || name[0] == '\0') {
         return -1;
     }
 
@@ -482,6 +484,16 @@ static int get_csr_address(const char *name)
         if (strcmp(name, csr_table[i].name) == 0) {
             return csr_table[i].address;
         }
+    }
+
+    char *endptr;
+    long address = strtol(name, &endptr, 0);
+
+    if (endptr != name &&
+        *endptr == '\0' &&
+        address >= 0 &&
+        address <= 0xFFF) {
+        return (int)address;
     }
 
     return -1;

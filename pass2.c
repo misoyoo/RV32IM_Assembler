@@ -2146,7 +2146,7 @@ if (strcmp(mnemonic, ".align") == 0) {
                 generated.bytes,
                 generated.size,
                 text_offset + i,
-                0x00000013
+                0x00000000
             ) != 0) {
             goto cleanup;
         }
@@ -2157,7 +2157,7 @@ if (strcmp(mnemonic, ".align") == 0) {
         if (append_listing_entry(
                 &generated,
                 current_address + i,
-                0x00000013,
+                0x00000000,
                 4,
                 listing_source
             ) != 0) {

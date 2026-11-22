@@ -687,6 +687,7 @@ int get_directive_size(
 
     const char *mnemonic = parsed_line->mnemonic;
 
+    
     // ------------------------------------
     // .byte, .half, .word
     // ------------------------------------
@@ -708,15 +709,26 @@ int get_directive_size(
             return -1;
         }
 
-        for (int i = 0; i < parsed_line->operand_count; i++) {
-            uint32_t value;
+        /* .half must start at a 2-byte aligned address */
+        if (element_size == 2 && (current_address & 1u) != 0) {
+            return -1;
+        }
 
-            if (evaluate_expression(
-                    parsed_line->operands[i],
-                    symbols,
-                    &value
-                ) != 0) {
-                return -1;
+        /*
+         * .word values are evaluated in Pass 2,
+         * after all labels have been registered.
+         */
+        if (element_size != 4) {
+            for (int i = 0; i < parsed_line->operand_count; i++) {
+                uint32_t value;
+
+                if (evaluate_expression(
+                        parsed_line->operands[i],
+                        symbols,
+                        &value
+                    ) != 0) {
+                    return -1;
+                }
             }
         }
 
@@ -725,6 +737,7 @@ int get_directive_size(
 
         return 1;
     }
+
 
     // ------------------------------------
     // .ascii, .asciz
