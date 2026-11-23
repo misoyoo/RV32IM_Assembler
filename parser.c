@@ -3,6 +3,7 @@
 #include <ctype.h>
 
 #include "parser.h"
+#include "symbol_table.h"
 
 // ========================================
 // Utility functions
@@ -283,6 +284,10 @@ int parse_line(
                 position,
                 label_length
             ) != 0) {
+            return -1;
+        }
+
+        if (!symbol_table_is_valid_name(parsed_line->label)) {
             return -1;
         }
 

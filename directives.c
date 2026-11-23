@@ -27,16 +27,30 @@ static void skip_spaces(ExprParser *parser)
     }
 }
 
+static int is_ascii_alpha(char ch)
+{
+    unsigned char c = (unsigned char)ch;
+
+    return (c >= 'A' && c <= 'Z') ||
+           (c >= 'a' && c <= 'z');
+}
+
+static int is_ascii_digit(char ch)
+{
+    return ch >= '0' && ch <= '9';
+}
+
 static int is_identifier_start(char ch)
 {
-    return isalpha((unsigned char)ch) ||
-           ch == '_' || ch == '.' || ch == '$';
+    return is_ascii_alpha(ch) ||
+           ch == '_' || ch == '.';
 }
 
 static int is_identifier_char(char ch)
 {
-    return isalnum((unsigned char)ch) ||
-           ch == '_' || ch == '.' || ch == '$';
+    return is_ascii_alpha(ch) ||
+           is_ascii_digit(ch) ||
+           ch == '_' || ch == '.';
 }
 
 // ========================================
@@ -145,6 +159,42 @@ static int parse_primary(
 
     // Number literal
     if (isdigit((unsigned char)*parser->cursor)) {
+
+        // Binary literal: 0b... or 0B...
+        if (parser->cursor[0] == '0' &&
+            (parser->cursor[1] == 'b' ||
+             parser->cursor[1] == 'B')) {
+
+            const char *end = parser->cursor + 2;
+            uint64_t number = 0;
+
+            if (*end != '0' && *end != '1') {
+                return -1;
+            }
+
+            while (*end == '0' || *end == '1') {
+                number = number * 2u +
+                         (uint64_t)(*end - '0');
+
+                if (number > UINT32_MAX) {
+                    return -1;
+                }
+
+                end++;
+            }
+
+            // Reject malformed adjacent characters such as 0b102.
+            if (is_identifier_char(*end)) {
+                return -1;
+            }
+
+            parser->cursor = end;
+            *value = (uint32_t)number;
+
+            return 0;
+        }
+
+        // Decimal and hexadecimal literals
         errno = 0;
 
         char *end;
@@ -526,21 +576,7 @@ int evaluate_expression(
 
 static int is_valid_symbol_name(const char *name)
 {
-    if (name == NULL || name[0] == '\0') {
-        return 0;
-    }
-
-    if (!is_identifier_start(name[0])) {
-        return 0;
-    }
-
-    for (size_t i = 1; name[i] != '\0'; i++) {
-        if (!is_identifier_char(name[i])) {
-            return 0;
-        }
-    }
-
-    return 1;
+    return symbol_table_is_valid_name(name);
 }
 
 int process_equ_directive(

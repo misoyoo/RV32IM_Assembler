@@ -23,6 +23,8 @@ typedef struct {
 
 int symbol_table_init(SymbolTable *table);
 
+int symbol_table_is_valid_name(const char *name);
+
 void symbol_table_destroy(SymbolTable *table);
 
 int symbol_table_add(

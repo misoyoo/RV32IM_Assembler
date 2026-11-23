@@ -40,6 +40,55 @@ void symbol_table_destroy(SymbolTable *table)
 
 
 /* ========================================
+   Symbol Name Validation
+   ======================================== */
+
+int symbol_table_is_valid_name(const char *name)
+{
+    if (name == NULL || name[0] == '\0') {
+        return 0;
+    }
+
+    size_t length = 0;
+
+    unsigned char first = (unsigned char)name[0];
+
+    int valid_first =
+        (first >= 'A' && first <= 'Z') ||
+        (first >= 'a' && first <= 'z') ||
+        first == '_' ||
+        first == '.';
+
+    if (!valid_first) {
+        return 0;
+    }
+
+    for (size_t i = 0; name[i] != '\0'; i++) {
+        unsigned char c = (unsigned char)name[i];
+
+        int valid_char =
+            (c >= 'A' && c <= 'Z') ||
+            (c >= 'a' && c <= 'z') ||
+            (c >= '0' && c <= '9') ||
+            c == '_' ||
+            c == '.';
+
+        if (!valid_char) {
+            return 0;
+        }
+
+        length++;
+
+        if (length >= SYMBOL_NAME_MAX) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+
+/* ========================================
    Find Symbol
    ======================================== */
 
@@ -115,9 +164,7 @@ int symbol_table_add_typed(
 )
 {
     if (table == NULL ||
-        name == NULL ||
-        name[0] == '\0' ||
-        strlen(name) >= SYMBOL_NAME_MAX) {
+        !symbol_table_is_valid_name(name)) {
         return -1;
     }
 
@@ -211,9 +258,7 @@ int symbol_table_declare_global(
 )
 {
     if (table == NULL ||
-        name == NULL ||
-        name[0] == '\0' ||
-        strlen(name) >= SYMBOL_NAME_MAX) {
+        !symbol_table_is_valid_name(name)) {
         return -1;
     }
 

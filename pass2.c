@@ -1569,30 +1569,29 @@ static int check_data_value_range(
         return 0;
     }
 
-    uint32_t unsigned_max =
-        (1U << (width * 8)) - 1U;
+    if (width != 1 && width != 2) {
+        return -1;
+    }
 
+    uint32_t bit_count = width * 8u;
+
+    uint32_t unsigned_max =
+        (1u << bit_count) - 1u;
+
+    /* Accept unsigned values */
     if (value <= unsigned_max) {
         return 0;
     }
 
-    int64_t signed_value;
+    /* Accept valid negative two's-complement values */
+    uint32_t signed_min_encoding =
+        0u - (1u << (bit_count - 1u));
 
-    if (value <= INT32_MAX) {
-        signed_value = value;
-    }
-    else {
-        signed_value = (int64_t)value - 4294967296LL;
-    }
-
-    int64_t signed_min =
-        -(1LL << (width * 8 - 1));
-
-    if (signed_value < signed_min) {
-        return -1;
+    if (value >= signed_min_encoding) {
+        return 0;
     }
 
-    return 0;
+    return -1;
 }
 
 /* Convert one hexadecimal digit */
