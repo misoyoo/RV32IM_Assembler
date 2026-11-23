@@ -455,20 +455,13 @@ typedef struct {
 
 static const CSR csr_table[] = {
     {"mstatus",    0x300},
-    {"misa",       0x301},
-    {"medeleg",    0x302},
-    {"mideleg",    0x303},
     {"mie",        0x304},
     {"mtvec",      0x305},
-    {"mcounteren", 0x306},
     {"mscratch",   0x340},
     {"mepc",       0x341},
     {"mcause",     0x342},
     {"mtval",      0x343},
     {"mip",        0x344},
-    {"cycle",      0xC00},
-    {"time",       0xC01},
-    {"instret",    0xC02},
     {"mhartid",    0xF14}
 };
 

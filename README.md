@@ -106,7 +106,7 @@ bss_end   = bss_base + bss_size
 
 정수 레지스터는 `x0`~`x31` 또는 ABI 이름(`zero`, `ra`, `sp`, `gp`, `tp`, `t0`~`t6`, `s0`~`s11`, `a0`~`a7`)으로 지정할 수 있습니다. `fp`는 `s0`와 같은 레지스터입니다.
 
-CSR 이름은 PDF의 9개 필수 이름 외에 구현된 named alias(`misa`, `medeleg`, `mideleg`, `mcounteren`, `cycle`, `time`, `instret`)도 인식합니다. 숫자 주소는 0~`0xFFF` 범위에서 받을 수 있습니다.
+CSR 이름은 PDF에 지정된 9개(`mstatus`, `mie`, `mtvec`, `mscratch`, `mepc`, `mcause`, `mtval`, `mip`, `mhartid`)만 인식합니다. 그 밖의 CSR은 `0`~`0xFFF` 숫자 주소로 지정합니다.
 
 Raw Binary에는 `.text`, `.data` 및 영역 사이의 정렬 패딩이 포함됩니다. `.bss`는 주소와 크기만 계산하며 바이너리에는 기록하지 않습니다. `.bss`에서는 `.space`와 `.align`을 지원합니다.
 
@@ -152,7 +152,7 @@ done
 
 ## 테스트
 
-현재 `tests/`에는 C 테스트 15개가 있습니다(기존 13개와 immediate/system 범위 추가 테스트 2개). 다음 명령은 파일 테스트에 필요한 예제 인자를 전달합니다.
+현재 `tests/`에는 C 테스트 16개가 있습니다(기존 13개와 immediate/system/CSR 범위 추가 테스트 3개). 다음 명령은 파일 테스트에 필요한 예제 인자를 전달합니다.
 
 ```bash
 test_dir=$(mktemp -d)
@@ -183,7 +183,7 @@ for file in tests/*.c; do
 done
 ```
 
-검증 기록에는 이 C 테스트 15개, assembly fixture 13개, 교수님 예제 4개 재어셈블 결과가 포함되어 있습니다. `docs/RESULTS.md`에 검증 범위와 한계를 정리했습니다.
+검증 기록에는 이 C 테스트 16개, assembly fixture 13개, 교수님 예제 4개 재어셈블 결과가 포함되어 있습니다. `docs/RESULTS.md`에 검증 범위와 한계를 정리했습니다.
 
 ## CPUlator에서 실행하는 방법
 
