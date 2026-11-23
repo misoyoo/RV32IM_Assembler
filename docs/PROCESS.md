@@ -66,7 +66,7 @@ Encoder는 명령어 형식에 맞게 각 비트 필드를 조합하여 32비트
 
 `li`는 32-bit 값 중 signed 12-bit 범위이면 `addi` 한 개, 그 외는 `lui`와 `addi` 두 개로 확장한다. `la`는 `auipc`와 `addi` 두 개로 확장하고 Pass 1에서 8바이트를 차지한다. 상위 immediate 계산은 하위 12비트가 sign extension되는 규칙에 맞춰 보정한다.
 
-필수 시스템 명령은 `ecall`, `ebreak`, `mret`, `wfi`, 인자 없는 `fence`이다. `sret`, `fence.i`, `uret`은 Pass 1과 인코더에서 거부한다. CSR 이름은 PDF에 지정된 9개만 허용하며, 다른 CSR은 숫자 주소 0–`0xFFF`로 입력한다.
+필수 시스템 명령은 `ecall`, `ebreak`, `mret`, `wfi`, 인자 없는 `fence`이다. CSR 이름은 PDF에 지정된 9개만 허용하며, 다른 CSR은 숫자 주소 0–`0xFFF`로 입력한다.
 
 ## 5. 지시어 처리
 
@@ -153,7 +153,7 @@ Listing 파일에는 출력 항목의 주소, 기계어 또는 데이터 값, �
 
 출력 파일은 Raw Binary이므로 실행 시작 주소에 관한 ELF 헤더나 별도의 주소 메타데이터가 없다.
 
-CPUlator의 RISC-V DE10-Lite 환경에서 실행하려면 다음 절차를 사용할 수 있다. 이 문서는 절차 안내이며, 최신 코드 검증에서 CPUlator 실행은 수행하지 않았다.
+CPUlator의 RISC-V DE10-Lite 환경에서 실행하려면 다음 절차를 사용할 수 있다.
 
 1. Load/Save Memory에서 Format을 `Raw`로 지정한다.
 2. Element size를 `1 byte`로 지정한다.
@@ -164,7 +164,7 @@ CPUlator의 RISC-V DE10-Lite 환경에서 실행하려면 다음 절차를 사�
 
 메모리 로드 주소와 PC는 서로 다른 개념이다. Raw Binary를 메모리에 로드하는 것만으로 PC가 자동 변경되지는 않는다.
 
-PC를 `0x00010000`으로 설정하는 것은 프로그램 시작 위치를 지정하는 실행 환경 설정이다. 현재 코드 검증에서는 CPUlator 실행을 수행하지 않았으므로 아래 절차는 사용 안내이지 최근 실행 검증 결과가 아니다.
+PC를 `0x00010000`으로 설정하는 것은 프로그램 시작 위치를 지정하는 실행 환경 설정이다.
 
 ## 11. 오류 처리
 
