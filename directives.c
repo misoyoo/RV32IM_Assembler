@@ -195,13 +195,22 @@ static int parse_primary(
         }
 
         // Decimal and hexadecimal literals
+        int base = 10;
+
+        // Use base 16 only for explicit hexadecimal prefixes.
+        if (parser->cursor[0] == '0' &&
+            (parser->cursor[1] == 'x' ||
+            parser->cursor[1] == 'X')) {
+            base = 16;
+        }
+
         errno = 0;
 
         char *end;
         unsigned long long number = strtoull(
-            parser->cursor,
+        parser->cursor,
             &end,
-            0
+            base
         );
 
         if (end == parser->cursor ||

@@ -45,7 +45,32 @@ static int copy_field(
 
     return 0;
 }
+static int is_valid_label(const char *name)
+{
+    if (name == NULL || name[0] == '\0')
+        return 0;
 
+    // 첫 글자: 영문자, _, . 허용
+    char c = name[0];
+
+    if (!((c >= 'A' && c <= 'Z') ||
+          (c >= 'a' && c <= 'z') ||
+          c == '_' || c == '.'))
+        return 0;
+
+    // 나머지: 영문자, 숫자, _, . 허용
+    for (int i = 1; name[i] != '\0'; i++) {
+        c = name[i];
+
+        if (!((c >= 'A' && c <= 'Z') ||
+              (c >= 'a' && c <= 'z') ||
+              (c >= '0' && c <= '9') ||
+              c == '_' || c == '.'))
+            return 0;
+    }
+
+    return 1;
+}
 // ========================================
 // Remove comments
 // ========================================
@@ -184,6 +209,9 @@ static int parse_operands(
                     start,
                     length
                 ) != 0) {
+                return -1;
+            }
+            if (!is_valid_label(parsed_line->label)) {
                 return -1;
             }
 
