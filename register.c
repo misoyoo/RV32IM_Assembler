@@ -15,28 +15,47 @@ static const char *register_names[32] = {
 
 int get_register_number(const char *name)
 {
-    // ABI 이름 검색
+    if (name == NULL || name[0] == '\0') {
+        return -1;
+    }
+
+    // ABI register name lookup
     for (int i = 0; i < 32; i++) {
         if (strcmp(name, register_names[i]) == 0) {
             return i;
         }
     }
 
-    // fp는 s0와 같은 레지스터
+    // fp is an alias for s0
     if (strcmp(name, "fp") == 0) {
         return 8;
     }
 
-    // x0 ~ x31 형식 처리
-    if (name[0] == 'x') {
-        char *end;
-        long num = strtol(name + 1, &end, 10);
+    // x0 ~ x31 format
+    if (name[0] != 'x' ||
+        name[1] == '\0') {
+        return -1;
+    }
 
-        if (*end == '\0' && end != name + 1 &&
-            num >= 0 && num <= 31) {
-            return (int)num;
+    // Reject leading zeros except for x0
+    if (name[1] == '0' && name[2] != '\0') {
+        return -1;
+    }
+
+    int num = 0;
+
+    for (const char *p = name + 1; *p != '\0'; p++) {
+        // Only decimal digits are allowed after 'x'
+        if (*p < '0' || *p > '9') {
+            return -1;
+        }
+
+        num = num * 10 + (*p - '0');
+
+        if (num > 31) {
+            return -1;
         }
     }
 
-    return -1;
+    return num;
 }
