@@ -52,34 +52,42 @@ static int copy_field(
 static void remove_comments(char *line)
 {
     int in_string = 0;
+    int in_character = 0;
     int escaped = 0;
 
     for (int i = 0; line[i] != '\0'; i++) {
         char ch = line[i];
 
-        if (in_string) {
+        if (in_string || in_character) {
             if (escaped) {
                 escaped = 0;
             }
             else if (ch == '\\') {
                 escaped = 1;
             }
-            else if (ch == '"') {
+            else if (in_string && ch == '"') {
                 in_string = 0;
             }
+            else if (in_character && ch == '\'') {
+                in_character = 0;
+            }
+
+            continue;
         }
-        else {
-            if (ch == '"') {
-                in_string = 1;
-            }
-            else if (ch == '#') {
-                line[i] = '\0';
-                break;
-            }
-            else if (ch == '/' && line[i + 1] == '/') {
-                line[i] = '\0';
-                break;
-            }
+
+        if (ch == '"') {
+            in_string = 1;
+        }
+        else if (ch == '\'') {
+            in_character = 1;
+        }
+        else if (ch == '#') {
+            line[i] = '\0';
+            break;
+        }
+        else if (ch == '/' && line[i + 1] == '/') {
+            line[i] = '\0';
+            break;
         }
     }
 }
@@ -100,25 +108,32 @@ static int parse_operands(
     int brace_depth = 0;
 
     int in_string = 0;
+    int in_character = 0;
     int escaped = 0;
 
     for (char *cursor = text; ; cursor++) {
         char ch = *cursor;
 
-        if (in_string) {
+        if (in_string || in_character) {
             if (escaped) {
                 escaped = 0;
             }
             else if (ch == '\\') {
                 escaped = 1;
             }
-            else if (ch == '"') {
+            else if (in_string && ch == '"') {
                 in_string = 0;
+            }
+            else if (in_character && ch == '\'') {
+                in_character = 0;
             }
         }
         else {
             if (ch == '"') {
                 in_string = 1;
+            }
+            else if (ch == '\'') {
+                in_character = 1;
             }
             else if (ch == '(') {
                 parenthesis_depth++;
@@ -156,6 +171,7 @@ static int parse_operands(
 
         if (ch == '\0') {
             if (in_string ||
+                in_character ||
                 parenthesis_depth != 0 ||
                 bracket_depth != 0 ||
                 brace_depth != 0) {
@@ -166,6 +182,7 @@ static int parse_operands(
         }
         else if (ch == ',' &&
                  !in_string &&
+                 !in_character &&
                  parenthesis_depth == 0 &&
                  bracket_depth == 0 &&
                  brace_depth == 0) {
