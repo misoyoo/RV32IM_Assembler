@@ -20,7 +20,14 @@ int main(void)
         {"bad@name: nop", 0},
         {"loop-name: nop", 0},
         {"abc$def: nop", 0},
-        {"1_start: nop", 0}
+        {"1_start: nop", 0},
+
+        {"addi t0, t1, 1", 1},
+        {"lw t0, 0(sp)", 1},
+        {"li t0, 1000", 1},
+        {"sw t0, 0(sp)", 1},
+        {"loop: addi t0, t1, 1", 1},
+        {"9loop: addi t0, t1, 1", 0},
     };
 
     int count = sizeof(tests) / sizeof(tests[0]);
