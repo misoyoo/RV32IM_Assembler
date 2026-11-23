@@ -11,7 +11,7 @@ C로 구현한 RV32IM 2-pass 어셈블러입니다. 어셈블리 소스(`.s`)를
   - Pass 2: 명령어를 기계어로 인코딩하고 초기화 데이터를 바이너리에 기록합니다.
 - **기본 명령어 56개**: RV32I 40개, M 확장 8개, Zicsr 및 특권 명령 8개를 지원합니다.
 - **인코딩**: R/I/S/B/U/J 형식. signed immediate 범위, 분기·점프 오프셋 및 정렬 조건을 검사합니다.
-- **레지스터**: `x0`~`x31`, ABI 레지스터 이름 및 `fp`(`s0`) 별칭을 지원합니다.
+- **레지스터**: `x0`–`x31`, ABI 레지스터 이름 및 `fp`(`s0`) 별칭을 지원합니다.
 - **심볼 처리**: 라벨, `.equ`, `.global`, `.globl` 및 내장 심볼 5개를 지원합니다.
 - **PDF 가상 명령어**: `li`, `la`, `mv`, `nop`, `not`, `neg`, `j`, `jr`, `call`, `ret`, `beqz`, `bnez`, `bgt`, `ble`, `bgtu`, `bleu`, `csrr`, `csrw`, `csrsi`, `csrci`.
 - **데이터 및 정렬**: `.text`, `.data`, `.bss`, `.byte`, `.half`, `.word`, `.ascii`, `.asciz`, `.space`, `.align`을 지원합니다.
@@ -104,9 +104,9 @@ bss_end   = bss_base + bss_size
 
 위 5개 심볼은 어셈블러가 미리 정의합니다. 첫 섹션 지시어가 생략된 경우 `.text`에서 시작합니다.
 
-정수 레지스터는 `x0`~`x31` 또는 ABI 이름(`zero`, `ra`, `sp`, `gp`, `tp`, `t0`~`t6`, `s0`~`s11`, `a0`~`a7`)으로 지정할 수 있습니다. `fp`는 `s0`와 같은 레지스터입니다.
+정수 레지스터는 `x0`–`x31` 또는 ABI 이름(`zero`, `ra`, `sp`, `gp`, `tp`, `t0`–`t6`, `s0`–`s11`, `a0`–`a7`)으로 지정할 수 있습니다. `fp`는 `s0`와 같은 레지스터입니다.
 
-CSR 이름은 PDF에 지정된 9개(`mstatus`, `mie`, `mtvec`, `mscratch`, `mepc`, `mcause`, `mtval`, `mip`, `mhartid`)만 인식합니다. 그 밖의 CSR은 `0`~`0xFFF` 숫자 주소로 지정합니다.
+CSR 이름은 PDF에 지정된 9개(`mstatus`, `mie`, `mtvec`, `mscratch`, `mepc`, `mcause`, `mtval`, `mip`, `mhartid`)만 인식합니다. 그 밖의 CSR은 `0`–`0xFFF` 숫자 주소로 지정합니다.
 
 Raw Binary에는 `.text`, `.data` 및 영역 사이의 정렬 패딩이 포함됩니다. `.bss`는 주소와 크기만 계산하며 바이너리에는 기록하지 않습니다. `.bss`에서는 `.space`와 `.align`을 지원합니다.
 
