@@ -1,6 +1,6 @@
 # RV32IM Assembler
 
-C로 구현한 RISC-V RV32IM 2-pass 어셈블러입니다. 어셈블리 소스(`.s`)를 읽어 CPUlator RISC-V DE10-Lite에서 실행할 수 있는 little-endian Raw Binary(`.bin`)와 Listing(`.lst`)을 생성합니다.
+C로 구현한 RV32IM 2-pass 어셈블러입니다. 어셈블리 소스(`.s`)를 읽어 little-endian Raw Binary(`.bin`)와 Listing(`.lst`)을 생성합니다. PDF 요구 범위는 RV32I, M, Zicsr와 일부 machine-mode 시스템 명령입니다.
 
 출력은 ELF가 아닌 Raw Binary입니다. 파일 자체에는 시작 주소나 relocation 정보가 포함되지 않습니다.
 
@@ -9,13 +9,28 @@ C로 구현한 RISC-V RV32IM 2-pass 어셈블러입니다. 어셈블리 소스(`
 - **Two-pass 구조**
   - Pass 1: 섹션 크기, 메모리 주소 및 심볼 정보를 계산합니다.
   - Pass 2: 명령어를 기계어로 인코딩하고 초기화 데이터를 바이너리에 기록합니다.
-- **명령어 인코딩**: RV32I, RV32M, CSR 및 System 명령어와 R/I/S/B/U/J 형식을 지원합니다.
+- **기본 명령어 56개**: RV32I 40개, M 확장 8개, Zicsr 및 특권 명령 8개를 지원합니다.
+- **인코딩**: R/I/S/B/U/J 형식. signed immediate 범위, 분기·점프 오프셋 및 정렬 조건을 검사합니다.
 - **레지스터**: `x0`~`x31`, ABI 레지스터 이름 및 `fp`(`s0`) 별칭을 지원합니다.
 - **심볼 처리**: 라벨, `.equ`, `.global`, `.globl` 및 내장 심볼 5개를 지원합니다.
-- **의사 명령어**: `li`, `la`, `mv`, `nop`, `not`, `neg`, `j`, `jr`, `call`, `ret`, 조건 분기 별칭 및 CSR 별칭 등을 지원합니다.
+- **PDF 가상 명령어**: `li`, `la`, `mv`, `nop`, `not`, `neg`, `j`, `jr`, `call`, `ret`, `beqz`, `bnez`, `bgt`, `ble`, `bgtu`, `bleu`, `csrr`, `csrw`, `csrsi`, `csrci`.
 - **데이터 및 정렬**: `.text`, `.data`, `.bss`, `.byte`, `.half`, `.word`, `.ascii`, `.asciz`, `.space`, `.align`을 지원합니다.
-- **오류 검사**: immediate 범위, 분기·점프 거리, 잘못된 레지스터, operand 개수, 중복 라벨 및 미정의 심볼 등을 검사합니다.
+- **CSR**: PDF의 `mstatus`, `mie`, `mtvec`, `mscratch`, `mepc`, `mcause`, `mtval`, `mip`, `mhartid` 이름과 12비트 숫자 CSR 주소를 지원합니다.
+- **시스템 명령**: `ecall`, `ebreak`, `mret`, `wfi`, 인자 없는 `fence`를 지원합니다. `sret`, `fence.i`, `uret`은 거부합니다.
+- **오류 검사**: 범위 초과 immediate, 분기·점프 거리 및 정렬 오류, 잘못된 레지스터·operand 개수, 중복 라벨, 미정의 심볼, 알 수 없는 명령·지시어 등을 검사합니다.
 - **Binary Validation**: Pass 1에서 계산한 예상 크기와 실제 생성된 바이너리 크기를 비교합니다.
+
+### 명령어 목록
+
+- RV32I R-type: `add`, `sub`, `sll`, `slt`, `sltu`, `xor`, `srl`, `sra`, `or`, `and`
+- M 확장: `mul`, `mulh`, `mulhsu`, `mulhu`, `div`, `divu`, `rem`, `remu`
+- I-type 산술: `addi`, `slti`, `sltiu`, `xori`, `ori`, `andi`, `slli`, `srli`, `srai`
+- Load: `lb`, `lh`, `lw`, `lbu`, `lhu`, `jalr`
+- Store: `sb`, `sh`, `sw`
+- Branch: `beq`, `bne`, `blt`, `bge`, `bltu`, `bgeu`
+- U/J: `lui`, `auipc`, `jal`
+- CSR: `csrrw`, `csrrs`, `csrrc`, `csrrwi`, `csrrsi`, `csrrci`
+- System: `ecall`, `ebreak`, `mret`, `wfi`, 인자 없는 `fence`
 
 ## 폴더 구성
 
@@ -89,15 +104,19 @@ bss_end   = bss_base + bss_size
 
 위 5개 심볼은 어셈블러가 미리 정의합니다. 첫 섹션 지시어가 생략된 경우 `.text`에서 시작합니다.
 
+정수 레지스터는 `x0`~`x31` 또는 ABI 이름(`zero`, `ra`, `sp`, `gp`, `tp`, `t0`~`t6`, `s0`~`s11`, `a0`~`a7`)으로 지정할 수 있습니다. `fp`는 `s0`와 같은 레지스터입니다.
+
+CSR 이름은 PDF의 9개 필수 이름 외에 구현된 named alias(`misa`, `medeleg`, `mideleg`, `mcounteren`, `cycle`, `time`, `instret`)도 인식합니다. 숫자 주소는 0~`0xFFF` 범위에서 받을 수 있습니다.
+
 Raw Binary에는 `.text`, `.data` 및 영역 사이의 정렬 패딩이 포함됩니다. `.bss`는 주소와 크기만 계산하며 바이너리에는 기록하지 않습니다. `.bss`에서는 `.space`와 `.align`을 지원합니다.
 
-## `jal` 기본 목적지 레지스터 관련 사항
+## 가상 명령 확장
 
-한 operand 형식의 `jal label`은 `jal ra, label`로 인코딩합니다. 제공된 과제 예제들이 `jal label`로 함수를 호출하고 `ret`으로 복귀하므로, 원본 예제를 수정하지 않고 실행하기 위한 선택입니다.
+`jal label`은 `jal ra, label`로 처리합니다. 이는 과제 요구에 따른 동작입니다. 목적 레지스터를 직접 지정하는 `jal rd, label`도 지원합니다. `call label`은 `jal ra, label`, `ret`은 `jalr x0, 0(ra)` 한 개로 확장됩니다.
 
-과제 PDF 11페이지에는 `jal label`을 `jal a0, label`로 치환한다고 기재되어 있어 해당 규칙과 차이가 있습니다. 목적 레지스터를 명시하는 `jal rd, label` 형식은 지원하므로 `jal a0, label`도 직접 사용할 수 있습니다.
+`li`는 signed 12-bit 값이면 `addi` 한 개, 그 밖의 32-bit 값은 `lui`와 `addi` 두 개로 확장됩니다. `la`는 PC-relative `auipc`와 `addi` 두 개로 확장되며 Pass 1에서 8바이트를 예약합니다.
 
-`call label`은 `jal ra, label` 한 개로 확장하며, `ret`은 `jalr x0, 0(ra)`로 확장합니다.
+구현에는 PDF 목록 외의 추가 pseudo alias도 포함되어 있습니다. 예를 들어 `tail`, `seqz`, `snez`, `bltz`, `bgez`, `blez`, `bgtz`, `sltz`, `sgtz`, `csrs`, `csrc`, `csrwi`를 처리합니다. 이 목록은 과제 필수 범위를 넓히지 않으며 CPUlator에서 실행 검증한 기능을 뜻하지 않습니다.
 
 ## 제공 예제
 
@@ -118,6 +137,8 @@ Raw Binary에는 `.text`, `.data` 및 영역 사이의 정렬 패딩이 포함�
 전체 예제를 어셈블하려면 다음 명령을 사용합니다.
 
 ```bash
+mkdir -p output
+
 for file in examples/*.s; do
     name=$(basename "$file" .s)
 
@@ -127,12 +148,15 @@ for file in examples/*.s; do
 done
 ```
 
-## C 테스트
+이 명령은 현재 예제 파일을 전부 시도합니다. 최신 최종 재검증에서는 예제 9개 모두 어셈블 성공했습니다. 교수님 제공 예제 1~4의 상세 결과는 [검증 결과](docs/RESULTS.md)에 기록했습니다.
 
-`tests/`의 12개 C 테스트는 다음과 같이 컴파일하고 실행할 수 있습니다.
+## 테스트
+
+현재 `tests/`에는 C 테스트 15개가 있습니다(기존 13개와 immediate/system 범위 추가 테스트 2개). 다음 명령은 파일 테스트에 필요한 예제 인자를 전달합니다.
 
 ```bash
 test_dir=$(mktemp -d)
+trap 'rm -rf "$test_dir"' EXIT
 
 for file in tests/*.c; do
     name=$(basename "$file" .c)
@@ -157,11 +181,11 @@ for file in tests/*.c; do
             ;;
     esac
 done
-
-rm -rf "$test_dir"
 ```
 
-## CPUlator에서 실행
+검증 기록에는 이 C 테스트 15개, assembly fixture 13개, 교수님 예제 4개 재어셈블 결과가 포함되어 있습니다. `docs/RESULTS.md`에 검증 범위와 한계를 정리했습니다.
+
+## CPUlator에서 실행하는 방법
 
 대상 환경은 CPUlator RISC-V DE10-Lite(`rv32-de10-lite`)입니다.
 
@@ -172,7 +196,7 @@ rm -rf "$test_dir"
 5. Disassembly에서 주소 `00010000`의 첫 명령어를 확인합니다.
 6. PC를 `00010000`으로 설정한 뒤 실행합니다.
 
-Raw Binary에는 시작 주소 메타데이터가 없으므로 메모리 로드 주소와 PC 설정은 별도로 진행해야 합니다.
+Raw Binary에는 시작 주소 메타데이터가 없으므로 메모리 로드 주소와 PC 설정은 별도로 진행해야 합니다. 이 안내는 실행 절차이며, 이 문서의 최신 코드 검증에서 CPUlator 실행을 완료했다는 의미는 아닙니다.
 
 ## 문서
 
@@ -185,7 +209,7 @@ Raw Binary에는 시작 주소 메타데이터가 없으므로 메모리 로드 
 - ELF 생성, 링커, relocation 및 여러 오브젝트 파일 링크는 지원하지 않습니다.
 - BSS는 Raw Binary에 포함하지 않습니다.
 - 일부 인코딩 오류는 mnemonic 중심으로 출력하며 모든 operand에 대한 상세 진단을 제공하지는 않습니다.
-- `jal label` 기본 목적지 레지스터는 제공 예제 호환을 위해 `ra`를 사용하며, 과제 PDF의 `a0` 기본 규칙과 차이가 있습니다.
-- 검증은 CPUlator 시뮬레이터에서 수행했으며 실제 DE10-Lite 보드에서 수행한 것은 아닙니다.
+- `sret`, `fence.i`, `uret`, F/D, A, C 확장 및 링커/ELF 기능은 지원하지 않습니다.
+- 최신 재검증에서 CPUlator 실행은 수행하지 않았습니다. 실제 보드 실행도 검증하지 않았습니다.
 
 본 프로젝트의 설계, 코드 작성·수정, 오류 분석 및 테스트 과정에서 생성형 AI를 사용했습니다. 대표적인 프롬프트와 AI 및 사용자 역할은 [AI 사용 및 프롬프트 기록](docs/AI_PROMPTS.md)에 정리했습니다.

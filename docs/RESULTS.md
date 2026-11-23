@@ -2,18 +2,15 @@
 
 ## 1. 검증 개요
 
-본 프로젝트의 검증은 다음 순서로 진행했다.
+최종 코드 검토에서는 PDF 25페이지를 다시 확인하고 다음을 실제 실행했다.
 
-1. macOS 환경에서 어셈블러 컴파일
-2. 제공된 어셈블리 예제를 원본 그대로 어셈블
-3. Pass 1 및 Pass 2 실행 결과 확인
-4. Binary Validation을 통한 바이너리 크기 검증
-5. Listing 첫 명령어 주소와 섹션 배치 확인
-6. BSS 전용 예제 검증
-7. 잘못된 입력에 대한 오류 처리 검증
-8. CPUlator RISC-V DE10-Lite 시뮬레이터에서 예제 실행
+1. `-Wall -Wextra -std=c11`로 어셈블러와 테스트를 컴파일
+2. 기존 C 테스트 13개와 추가 C 테스트 2개 실행
+3. 13개 assembly fixture의 성공·실패 기대값 확인
+4. 교수님 예제 `asm_example1.s`~`asm_example4.s`를 원본 그대로 재어셈블
+5. 56개 필수 명령, 필수 가상 명령, immediate 경계 및 지원 범위 확인
 
-CPUlator 검증은 실제 DE10-Lite 보드가 아닌 웹 기반 시뮬레이터에서 수행했다.
+이번 검증에서는 CPUlator나 실제 보드에서 실행하지 않았다. 아래의 이전 CPUlator 실행 기록은 최신 검증 결과로 재확인되지 않았으므로 완료된 결과로 간주하지 않는다.
 
 ## 2. 빌드 환경 및 명령
 
@@ -25,7 +22,7 @@ gcc -Wall -Wextra -std=c11 -o assembler \
     symbol_table.c encoder.c register.c
 ```
 
-## 3. 제공 예제 전체 어셈블 검증
+## 3. 제공 예제 어셈블 검증
 
 `examples/` 폴더의 어셈블리 예제를 원본 그대로 사용하여 `.bin` 및 `.lst`를 생성했다.
 
@@ -37,31 +34,31 @@ for file in examples/*.s; do
 
     ./assembler "$file" \
         "output/${name}.bin" \
-        "output/${name}.lst" || break
+        "output/${name}.lst" || exit 1
 done
 ```
 
-마지막 전체 실행에서 다음 9개 예제 모두 `ASSEMBLY SUCCESS!`로 종료되었다.
+최종 재검증에서 `examples/*.s` 9개를 모두 어셈블했다. 교수님 제공 예제 4개 및 나머지 예제의 생성 Binary 크기는 다음과 같다.
 
-| 예제 | Text 크기 | Data 시작 주소 | Data 크기 | Binary 크기 |
-|---|---:|---:|---:|---:|
-| `asm_example1.s` | 680 B | `0x000102B0` | 28 B | 716 B |
-| `asm_example2.s` | 664 B | `0x000102A0` | 124 B | 796 B |
-| `asm_example3.s` | 800 B | `0x00010320` | 84 B | 884 B |
-| `asm_example4.s` | 1,916 B | `0x00010780` | 460 B | 2,380 B |
-| `ex01_getting_started.s` | 92 B | - | 0 B | 92 B |
-| `interval_timer.s` | 76 B | - | 0 B | 76 B |
-| `jtag_uart_echo.s` | 124 B | `0x00010080` | 27 B | 155 B |
-| `seven_segment_display.s` | 348 B | `0x00010160` | 16 B | 368 B |
-| `bss_layout_test.s` | 4 B | `0x00010010` | 8 B | 24 B |
+| 예제 | Binary 크기 |
+|---|---:|
+| `asm_example1.s` | 716 B |
+| `asm_example2.s` | 796 B |
+| `asm_example3.s` | 884 B |
+| `asm_example4.s` | 2,380 B |
+| `ex01_getting_started.s` | 92 B |
+| `interval_timer.s` | 76 B |
+| `jtag_uart_echo.s` | 155 B |
+| `seven_segment_display.s` | 368 B |
+| `bss_layout_test.s` | 24 B |
 
-모든 예제에서 실제 생성 크기와 프로그램이 계산한 예상 크기가 일치했다.
+아홉 예제 모두 `ASSEMBLY SUCCESS!`로 끝났고 Binary Validation에서 실제 생성 크기와 예상 크기가 일치했다.
 
 Text와 Data 사이의 정렬 간격이 포함될 수 있으므로 Text 크기와 Data 크기의 단순 합이 최종 Binary 크기와 항상 일치하는 것은 아니다. BSS는 Raw Binary에 포함하지 않는다.
 
 ## 4. 시작 주소 `0x00010000` 검증
 
-교수 요구사항인 프로그램 시작 주소를 예제 1~4에서 개별적으로 검증했다.
+교수님 예제 1~4의 어셈블 로그에서 Text Base가 `0x00010000`으로 출력됨을 확인했다. 이 검사는 바이너리의 시뮬레이터 실행을 뜻하지 않는다.
 
 사용한 명령은 다음과 같다.
 
@@ -92,36 +89,30 @@ done
 
 ## 5. BSS 배치 검증
 
-`bss_layout_test.s`를 사용하여 `.data`, `.align`, `.bss`, `.space` 처리를 확인했다.
+`tests/builtin_layout_test.s` fixture와 `examples/bss_layout_test.s`를 어셈블하고 Binary Validation을 확인했다. 또한 Pass 1의 BSS 주소 계산을 코드와 대조했다. 이 검증에서는 주소 배치 규칙을 확인했으며, 아래 표는 개별 심볼 주소나 BSS 크기 측정값을 제시하지 않는다.
 
 | 항목 | 결과 |
-|---|---:|
+|---|---|
 | Text 시작 주소 | `0x00010000` |
-| Text 크기 | 4 B |
-| Data 시작 주소 | `0x00010010` |
-| Data 크기 | 8 B |
-| BSS 시작 주소 | `0x00010020` |
-| BSS 크기 | 1,088 B |
-| `stack` 심볼 주소 | `0x00010020` |
-| `tcb` 심볼 주소 | `0x00010420` |
-| Binary 크기 | 24 B |
+| Data 시작 | Text 끝의 다음 16-byte 경계 |
+| BSS 시작 | Data 끝의 다음 16-byte 경계 |
+| Binary 출력 | BSS 바이트 제외 |
 
-BSS는 Data 영역 뒤에서 시작하며, `stack`은 BSS 내부의 `.align 4` 적용 후 배치되었다.
-
-BSS는 Raw Binary에 초기화 데이터로 포함되지 않고 주소와 크기 및 심볼 정보로 관리되는 것을 확인했다.
+BSS는 Data 영역 뒤에서 시작하며, Raw Binary에 초기화 데이터로 포함되지 않고 주소와 크기 및 심볼 정보로 관리된다.
 
 ## 6. 오류 검증 및 오류 처리 결과
 
-정상 입력뿐만 아니라 잘못된 입력을 별도로 만들어 Pass 1 및 Pass 2의 오류 처리 여부를 확인했다.
+오류 fixture 10개를 실행해 잘못된 입력이 모두 거부되는지 확인했다.
 
-| 테스트 입력 | 관찰된 결과 | 실패 단계 |
-|---|---|---|
-| 존재하지 않는 명령어 `invalid_op` | `unknown or invalid instruction 'invalid_op'` | Pass 1 |
-| `_start` 라벨 중복 정의 | `duplicate or invalid label '_start'` | Pass 1 |
-| 정의되지 않은 `MISSING_LABEL`을 `jal`에서 참조 | `cannot encode 'jal'` | Pass 2 |
-| 잘못된 레지스터 `badreg` 사용 | `cannot encode 'addi'` | Pass 2 |
-| `addi` immediate로 4096 사용 | `cannot encode 'addi'` | Pass 2 |
-| BSS에서 `.word 123` 사용 | `only .space and .align are supported in .bss` | Pass 1 |
+| 테스트 범주 | 관찰 결과 |
+|---|---|
+| 알 수 없는 명령·잘못된 operand 개수 | 어셈블 실패 |
+| 중복 라벨·미정의 라벨 | 어셈블 실패 |
+| 잘못된 레지스터 | 어셈블 실패 |
+| 홀수·범위 초과 branch/jump | 어셈블 실패 |
+| BSS에 데이터 값 지시어 | 어셈블 실패 |
+| `sret`, `fence.i`, `uret` | Pass 1에서 거부 |
+| signed 범위 초과 `addi` 양수 | Pass 2에서 거부, `.bin` 미생성 |
 
 ### 6.1 구현 및 검증 과정에서 확인한 문제와 처리
 
@@ -139,15 +130,11 @@ Text 영역이 끝난 직후 Data를 무조건 배치하면 16바이트 정렬 �
 
 따라서 Data Base를 Text 끝 주소의 다음 16바이트 경계로 계산하도록 구성했다. Pass 2에서도 정렬 공간을 바이너리 배치에 반영하고, 생성 크기 검증을 수행하도록 했다.
 
-**③ CPUlator에서 Raw Binary 로드 후 PC가 0에서 시작하는 문제**
+**③ Raw Binary 로드 주소와 PC**
 
 Raw Binary를 `0x00010000`에 정상적으로 로드했더라도 CPUlator의 PC가 자동으로 같은 주소로 변경되지는 않았다.
 
-초기에는 PC가 `0x00000000`에서 실행되어 유효한 프로그램 코드가 아닌 메모리 영역을 읽는 문제가 발생했다.
-
-이를 해결하기 위해 CPUlator Disassembly에서 첫 명령어 주소 `0x00010000`으로 이동해 PC를 해당 주소로 설정한 뒤 실행했다.
-
-이는 어셈블러의 주소 배치 오류가 아니라 Raw Binary 실행 환경에서 시작 주소를 별도로 지정해야 하는 문제였다.
+Raw Binary에는 시작 주소 메타데이터가 없다. 실행 환경에서 로드 주소와 PC를 별도로 설정해야 한다. 이번 최종 검증에서는 CPUlator 실행을 하지 않았다.
 
 **④ 잘못된 입력에 대한 오류 처리**
 
@@ -159,16 +146,18 @@ Raw Binary를 `0x00010000`에 정상적으로 로드했더라도 CPUlator의 PC�
 
 현재 인코딩 관련 오류 메시지는 mnemonic 중심으로 출력되며, 모든 잘못된 operand에 대해 상세한 원인을 표시하는 기능까지 구현된 것은 아니다.
 
-## 7. CPUlator 실행 검증
+## 7. CPUlator 실행 검증 상태
 
-공통 설정:
+CPUlator 실행은 이번 최종 재검증에서 수행하지 않았다. 아래 절차와 기능별 설명은 재현·코드 검토 참고이며 예제 동작 검증 결과가 아니다.
+
+공통 설정 안내:
 
 - Format: Raw
 - Element size: 1 byte
 - Start address: `0x00010000`
 - PC: `0x00010000`
 
-네 프로그램 모두 어셈블러의 Text Base와 Listing 첫 명령어 주소가 `0x00010000`인 것을 확인한 뒤 실행했다.
+네 프로그램 모두 어셈블러의 Text Base가 `0x00010000`이며 Listing 첫 명령어 주소도 `00010000`임을 확인했다. CPUlator에서 실행하지 않았다.
 
 ### 7.1 예제 1: 스톱워치
 
@@ -180,7 +169,7 @@ Raw Binary를 `0x00010000`에 정상적으로 로드했더라도 CPUlator의 PC�
 - HEX5~HEX0에 분, 초, 1/100초 표시
 - LEDR0 상태 표시
 
-CPUlator 실행 영상에서 시간 증가, 시작·정지 입력 및 초기화 동작을 확인했다.
+시간 증가, 시작·정지 입력, 초기화 동작은 CPUlator에서 확인하지 않았다.
 
 카운터 범위는 다음과 같다.
 
@@ -201,9 +190,7 @@ CPUlator 실행 영상에서 시간 증가, 시작·정지 입력 및 초기화 
 - HEX 및 JTAG UART에 결과 출력
 - LED 점등 전 입력 시 FAIL 출력
 
-CPUlator 영상에서 너무 일찍 KEY0를 누른 경우 `FAIL`이 출력되는 것을 확인했다.
-
-정상 측정에서는 HEX와 JTAG UART에 `2903 ms`가 출력되는 것을 확인했다.
+`FAIL` 처리와 측정값 출력은 소스의 구현 의도 설명이며 CPUlator 동작으로 확인된 결과가 아니다.
 
 소스 코드에서는 다음과 같은 계산을 사용한다.
 
@@ -234,7 +221,7 @@ speed = (SW & 0x7) + 1
 
 따라서 프레임당 이동 거리는 1~8픽셀이다.
 
-CPUlator 영상에서 사각형 이동, 색상 변경, 속도 변경 및 문자 버퍼의 튕긴 횟수 표시를 확인했다.
+사각형 이동, 색상·속도 변경, 튕긴 횟수 표시 및 VSync 동작은 이번 최종 검증에서 CPUlator로 확인하지 않았다.
 
 더블 버퍼링은 두 픽셀 버퍼 주소를 교대로 사용하고, 이전 공의 위치를 버퍼별로 관리하는 방식으로 구현했다.
 
@@ -261,24 +248,20 @@ UART 수신은 인터럽트가 아니라 폴링 방식으로 구현했다.
 
 타이머는 별도의 interval timer IRQ 16으로 처리한다. 따라서 UART 수신 방식은 폴링이고 타이머 동작은 인터럽트 방식이다.
 
-`LED 0`은 LEDR8~0을 끄는 명령이다. `TIMER 0`은 타이머를 중지하지만 LEDR9의 현재 출력 상태를 강제로 끄지는 않는다.
+명령별 동작은 소스 코드에서 읽을 수 있으나, 이번 최종 검증에서 UART 입출력이나 타이머 동작을 시뮬레이터에서 확인하지 않았다.
 
 ## 8. 최종 검증 요약
 
 | 검증 항목 | 결과 |
 |---|---|
-| 제공 예제 9개 어셈블 | 성공 |
-| Pass 1 및 Pass 2 | 성공 |
-| Binary Validation | 성공 |
-| 예제 1~4 시작 주소 `0x10000` | 확인 |
-| Listing 첫 명령어 주소 | 확인 |
-| BSS 주소 및 크기 계산 | 확인 |
-| 잘못된 입력 6종 오류 검출 | 확인 |
-| 예제 1 스톱워치 | CPUlator 동작 확인 |
-| 예제 2 반응속도 측정기 | CPUlator 동작 확인 |
-| 예제 3 VGA 공 튀기기 | CPUlator 동작 확인 |
-| 예제 4 JTAG UART 명령 해석기 | CPUlator 실행 및 소스 구현 확인 |
+| 경고 없는 `-Wall -Wextra -std=c11` 빌드 | 성공 |
+| 기존 C 테스트 13개 + 추가 C 테스트 2개 | 15/15 통과 |
+| Assembly fixture | 13/13 기대 결과 일치 |
+| 교수님 예제 1~4 어셈블 및 Binary Validation | 성공 |
+| 필수 56개 명령 smoke 입력 | 224바이트 생성 |
+| 필수 pseudo smoke 입력 | 96바이트 생성 |
+| Immediate·시스템 명령 경계 입력 | 기대한 허용/거부와 일치 |
+| CPUlator 실행 | 미검증 |
+| 실제 DE10-Lite 보드 실행 | 미검증 |
 
-본 검증은 CPUlator RISC-V DE10-Lite 시뮬레이터 환경에서 진행했으며 실제 DE10-Lite 보드에서 수행한 것은 아니다.
-
-또한 영상은 외부 장치의 출력과 프로그램의 기능 동작을 확인하는 자료이며, mtime 연산, 폴링, 더블 버퍼링 및 VSync와 같은 내부 구현은 소스 코드와 함께 검증했다.
+56개 명령 입력과 pseudo smoke 입력은 정상 어셈블됐지만, 모든 명령어 결과 워드를 독립 oracle과 비교하거나 CPU에서 실행한 것은 아니다. 대표 인코딩과 형식별 경계 테스트만 별도로 확인했다.
