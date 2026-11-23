@@ -12,6 +12,18 @@ int evaluate_expression(
     uint32_t *value
 );
 
+int evaluate_expression_signed(
+    const char *expression,
+    const SymbolTable *symbols,
+    int64_t *value
+);
+
+int evaluate_li_immediate(
+    const char *expression,
+    const SymbolTable *symbols,
+    int64_t *value
+);
+
 int process_equ_directive(
     const ParsedLine *parsed_line,
     SymbolTable *symbols

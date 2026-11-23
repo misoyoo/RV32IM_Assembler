@@ -9,6 +9,7 @@
 typedef struct {
     char name[SYMBOL_NAME_MAX];
     uint32_t address;
+    int64_t expression_value;
 
     char type;
     int is_global;
@@ -26,6 +27,18 @@ int symbol_table_init(SymbolTable *table);
 int symbol_table_is_valid_name(const char *name);
 
 void symbol_table_destroy(SymbolTable *table);
+
+int symbol_table_add_expression_value(
+    SymbolTable *table,
+    const char *name,
+    int64_t value
+);
+
+int symbol_table_get_expression_value(
+    const SymbolTable *table,
+    const char *name,
+    int64_t *value
+);
 
 int symbol_table_add(
     SymbolTable *table,

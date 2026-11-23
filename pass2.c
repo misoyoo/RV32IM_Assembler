@@ -36,22 +36,15 @@ static int evaluate_signed(
     int *value
 )
 {
-    uint32_t raw;
-
-    if (evaluate_expression(expression, symbols, &raw) != 0) {
-        return -1;
-    }
-
     int64_t signed_value;
 
-    if (raw <= INT32_MAX) {
-        signed_value = raw;
-    }
-    else {
-        signed_value = (int64_t)raw - 4294967296LL;
-    }
-
-    if (signed_value < INT_MIN || signed_value > INT_MAX) {
+    if (evaluate_expression_signed(
+            expression,
+            symbols,
+            &signed_value
+        ) != 0 ||
+        signed_value < INT_MIN ||
+        signed_value > INT_MAX) {
         return -1;
     }
 
@@ -634,13 +627,10 @@ static int encode_base_instruction(
     /* System instructions */
 
     if (strcmp(mnemonic, "mret") == 0 ||
-        strcmp(mnemonic, "sret") == 0 ||
-        strcmp(mnemonic, "uret") == 0 ||
         strcmp(mnemonic, "ecall") == 0 ||
         strcmp(mnemonic, "ebreak") == 0 ||
         strcmp(mnemonic, "wfi") == 0 ||
-        strcmp(mnemonic, "fence") == 0 ||
-        strcmp(mnemonic, "fence.i") == 0) {
+        strcmp(mnemonic, "fence") == 0) {
 
         if (parsed_line->operand_count != 0) {
             return -1;
@@ -861,22 +851,24 @@ static int encode_pseudo_instruction(
     /* li: addi or lui + addi */
 
     if (strcmp(mnemonic, "li") == 0) {
+        int64_t li_value;
+
         if (parsed_line->operand_count != 2 ||
             get_register(parsed_line->operands[0], &rd) != 0 ||
-            evaluate_signed(
+            evaluate_li_immediate(
                 parsed_line->operands[1],
                 symbols,
-                &immediate
+                &li_value
             ) != 0) {
             return -1;
         }
 
-        if (immediate >= -2048 && immediate <= 2047) {
+        if (li_value >= -2048 && li_value <= 2047) {
             if (encode_i_type(
                     "addi",
                     rd,
                     0,
-                    immediate,
+                    (int)li_value,
                     &instructions[0]
                 ) != 0) {
                 return -1;
@@ -890,7 +882,7 @@ static int encode_pseudo_instruction(
         int lower;
 
         if (split_immediate(
-                (int64_t)immediate,
+                li_value,
                 &upper,
                 &lower
             ) != 0) {
@@ -1561,15 +1553,10 @@ static int write_data_value(
 /* Check whether a value fits in .byte or .half */
 
 static int check_data_value_range(
-    const char *expression,
-    uint32_t value,
+    int64_t value,
     uint32_t width
 )
 {
-    if (expression == NULL) {
-        return -1;
-    }
-
     if (width == 4) {
         return 0;
     }
@@ -1578,30 +1565,12 @@ static int check_data_value_range(
         return -1;
     }
 
-    /* Skip leading whitespace */
-    while (*expression == ' ' ||
-           *expression == '\t' ||
-           *expression == '\n' ||
-           *expression == '\r') {
-        expression++;
-    }
-
     uint32_t bit_count = width * 8u;
+    int64_t signed_min = -((int64_t)1 << (bit_count - 1u));
+    uint32_t unsigned_max = (1u << bit_count) - 1u;
 
-    /* Handle explicitly negative values */
-    if (*expression == '-') {
-        uint32_t magnitude = 0u - value;
-        uint32_t signed_min_magnitude =
-            1u << (bit_count - 1u);
-
-        return magnitude <= signed_min_magnitude ? 0 : -1;
-    }
-
-    /* Handle non-negative values */
-    uint32_t unsigned_max =
-        (1u << bit_count) - 1u;
-
-    return value <= unsigned_max ? 0 : -1;
+    return value >= signed_min &&
+           value <= (int64_t)unsigned_max ? 0 : -1;
 }
 
 /* Convert one hexadecimal digit */
@@ -1808,20 +1777,21 @@ static int emit_data_directive(
 
     if (width != 0) {
         for (int i = 0; i < parsed_line->operand_count; i++) {
-            uint32_t value;
+            int64_t signed_value;
 
-            if (evaluate_expression(
+            if (evaluate_expression_signed(
                     parsed_line->operands[i],
                     symbols,
-                    &value
+                    &signed_value
                 ) != 0 ||
                 check_data_value_range(
-                parsed_line->operands[i],
-                value,
+                signed_value,
                 width
             ) != 0) {
                 return -1;
             }
+
+            uint32_t value = (uint32_t)signed_value;
 
             if (write_data_value(
                     buffer,

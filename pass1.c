@@ -187,9 +187,9 @@ static int get_instruction_size(
             return -1;
         }
 
-        uint32_t immediate;
+        int64_t immediate;
 
-        if (evaluate_expression(
+        if (evaluate_li_immediate(
                 parsed_line->operands[1],
                 symbols,
                 &immediate
@@ -197,8 +197,7 @@ static int get_instruction_size(
             return -1;
         }
 
-        if (immediate <= 0x7FFU ||
-            immediate >= 0xFFFFF800U) {
+        if (immediate >= -2048 && immediate <= 2047) {
             *size = 4;
         }
         else {
@@ -281,8 +280,7 @@ static int get_instruction_size(
     /* System instructions */
 
     static const char *const system_type[] = {
-        "ecall", "ebreak", "mret", "sret",
-        "uret", "wfi", "fence", "fence.i"
+        "ecall", "ebreak", "mret", "wfi", "fence"
     };
 
     /* One-instruction pseudo-instructions */

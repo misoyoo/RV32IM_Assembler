@@ -185,6 +185,7 @@ int symbol_table_add_typed(
         }
 
         existing->address = address;
+        existing->expression_value = (int64_t)address;
         existing->type = type;
         existing->defined = 1;
 
@@ -200,10 +201,10 @@ int symbol_table_add_typed(
     strcpy(new_symbol->name, name);
 
     new_symbol->address = address;
+    new_symbol->expression_value = (int64_t)address;
     new_symbol->type = type;
     new_symbol->is_global = 0;
-    new_symbol->defined = 1;
-
+    new_symbol->defined = 1;    
     table->count++;
 
     return 0;
@@ -244,6 +245,7 @@ int symbol_table_update_address(
     }
 
     symbol->address = address;
+    symbol->expression_value = (int64_t)address;
 
     return 0;
 }
@@ -281,6 +283,7 @@ int symbol_table_declare_global(
     new_symbol->type = 'U';
     new_symbol->is_global = 1;
     new_symbol->defined = 0;
+    new_symbol->expression_value = 0;
 
     table->count++;
 
@@ -310,6 +313,59 @@ int symbol_table_get(
             }
 
             *address = table->symbols[i].address;
+            return 0;
+        }
+    }
+
+    return -1;
+}
+int symbol_table_add_expression_value(
+    SymbolTable *table,
+    const char *name,
+    int64_t value
+)
+{
+    if (table == NULL || name == NULL) {
+        return -1;
+    }
+
+    if (symbol_table_add_typed(
+            table,
+            name,
+            (uint32_t)value,
+            'A'
+        ) != 0) {
+        return -1;
+    }
+
+    Symbol *symbol = find_symbol(table, name);
+
+    if (symbol == NULL || !symbol->defined) {
+        return -1;
+    }
+
+    symbol->expression_value = value;
+
+    return 0;
+}
+
+int symbol_table_get_expression_value(
+    const SymbolTable *table,
+    const char *name,
+    int64_t *value
+)
+{
+    if (table == NULL || name == NULL || value == NULL) {
+        return -1;
+    }
+
+    for (size_t i = 0; i < table->count; i++) {
+        if (strcmp(table->symbols[i].name, name) == 0) {
+            if (!table->symbols[i].defined) {
+                return -1;
+            }
+
+            *value = table->symbols[i].expression_value;
             return 0;
         }
     }

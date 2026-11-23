@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <stdint.h>
+#include <limits.h>
 
 #include "directives.h"
 
@@ -57,7 +58,7 @@ static int is_identifier_char(char ch)
 // Character Literal
 // ========================================
 
-static int parse_character(ExprParser *parser, uint32_t *value)
+static int parse_character(ExprParser *parser, int64_t *value)
 {
     if (*parser->cursor != '\'') {
         return -1;
@@ -112,7 +113,7 @@ static int parse_character(ExprParser *parser, uint32_t *value)
 
     parser->cursor++;
 
-    *value = ch;
+    *value = (int64_t)ch;
 
     return 0;
 }
@@ -123,12 +124,12 @@ static int parse_character(ExprParser *parser, uint32_t *value)
 
 static int parse_expression_or(
     ExprParser *parser,
-    uint32_t *value
+    int64_t *value
 );
 
 static int parse_primary(
     ExprParser *parser,
-    uint32_t *value
+    int64_t *value
 )
 {
     skip_spaces(parser);
@@ -189,7 +190,7 @@ static int parse_primary(
             }
 
             parser->cursor = end;
-            *value = (uint32_t)number;
+            *value = (int64_t)number;
 
             return 0;
         }
@@ -220,7 +221,7 @@ static int parse_primary(
         }
 
         parser->cursor = end;
-        *value = (uint32_t)number;
+        *value = (int64_t)number;
 
         return 0;
     }
@@ -241,7 +242,7 @@ static int parse_primary(
 
         name[length] = '\0';
 
-        if (symbol_table_get(
+        if (symbol_table_get_expression_value(
                 parser->symbols,
                 name,
                 value
@@ -261,7 +262,7 @@ static int parse_primary(
 
 static int parse_unary(
     ExprParser *parser,
-    uint32_t *value
+    int64_t *value
 )
 {
     skip_spaces(parser);
@@ -274,12 +275,12 @@ static int parse_unary(
     if (*parser->cursor == '-') {
         parser->cursor++;
 
-        if (parse_unary(parser, value) != 0) {
+        if (parse_unary(parser, value) != 0 ||
+            *value == INT64_MIN) {
             return -1;
         }
 
-        *value = 0U - *value;
-
+        *value = -(*value);
         return 0;
     }
 
@@ -290,8 +291,7 @@ static int parse_unary(
             return -1;
         }
 
-        *value = ~(*value);
-
+        *value = (int64_t)(uint32_t)(~(uint32_t)*value);
         return 0;
     }
 
@@ -303,9 +303,54 @@ static int parse_unary(
 // * / %
 // ========================================
 
+static int checked_add_int64(int64_t a, int64_t b, int64_t *result)
+{
+    if ((b > 0 && a > INT64_MAX - b) ||
+        (b < 0 && a < INT64_MIN - b)) {
+        return -1;
+    }
+
+    *result = a + b;
+    return 0;
+}
+
+static int checked_sub_int64(int64_t a, int64_t b, int64_t *result)
+{
+    if ((b < 0 && a > INT64_MAX + b) ||
+        (b > 0 && a < INT64_MIN + b)) {
+        return -1;
+    }
+
+    *result = a - b;
+    return 0;
+}
+
+static int checked_mul_int64(int64_t a, int64_t b, int64_t *result)
+{
+    if (a == 0 || b == 0) {
+        *result = 0;
+        return 0;
+    }
+
+    if (a == -1 && b == INT64_MIN) return -1;
+    if (b == -1 && a == INT64_MIN) return -1;
+
+    if (a > 0) {
+        if (b > 0 && a > INT64_MAX / b) return -1;
+        if (b < 0 && b < INT64_MIN / a) return -1;
+    }
+    else {
+        if (b > 0 && a < INT64_MIN / b) return -1;
+        if (b < 0 && a < INT64_MAX / b) return -1;
+    }
+
+    *result = a * b;
+    return 0;
+}
+
 static int parse_multiplicative(
     ExprParser *parser,
-    uint32_t *value
+    int64_t *value
 )
 {
     if (parse_unary(parser, value) != 0) {
@@ -323,7 +368,7 @@ static int parse_multiplicative(
 
         parser->cursor++;
 
-        uint32_t right;
+        int64_t right;
 
         if (parse_unary(parser, &right) != 0) {
             return -1;
@@ -333,8 +378,15 @@ static int parse_multiplicative(
             return -1;
         }
 
+        if ((op == '/' || op == '%') &&
+            *value == INT64_MIN && right == -1) {
+            return -1;
+        }
+
         if (op == '*') {
-            *value *= right;
+            if (checked_mul_int64(*value, right, value) != 0) {
+                return -1;
+            }
         }
         else if (op == '/') {
             *value /= right;
@@ -354,7 +406,7 @@ static int parse_multiplicative(
 
 static int parse_additive(
     ExprParser *parser,
-    uint32_t *value
+    int64_t *value
 )
 {
     if (parse_multiplicative(parser, value) != 0) {
@@ -372,17 +424,21 @@ static int parse_additive(
 
         parser->cursor++;
 
-        uint32_t right;
+        int64_t right;
 
         if (parse_multiplicative(parser, &right) != 0) {
             return -1;
         }
 
         if (op == '+') {
-            *value += right;
+            if (checked_add_int64(*value, right, value) != 0) {
+                return -1;
+            }
         }
         else {
-            *value -= right;
+            if (checked_sub_int64(*value, right, value) != 0) {
+                return -1;
+            }
         }
     }
 
@@ -396,7 +452,7 @@ static int parse_additive(
 
 static int parse_shift(
     ExprParser *parser,
-    uint32_t *value
+    int64_t *value
 )
 {
     if (parse_additive(parser, value) != 0) {
@@ -420,22 +476,23 @@ static int parse_shift(
 
         parser->cursor += 2;
 
-        uint32_t right;
+        int64_t right;
 
-        if (parse_additive(parser, &right) != 0) {
+        if (parse_additive(parser, &right) != 0 ||
+            right < 0 || right >= 32) {
             return -1;
         }
 
-        if (right >= 32) {
-            return -1;
-        }
+        uint32_t bits = (uint32_t)*value;
 
         if (is_left) {
-            *value <<= right;
+            bits <<= (unsigned int)right;
         }
         else {
-            *value >>= right;
+            bits >>= (unsigned int)right;
         }
+
+        *value = (int64_t)bits;
     }
 
     return 0;
@@ -447,7 +504,7 @@ static int parse_shift(
 
 static int parse_expression_and(
     ExprParser *parser,
-    uint32_t *value
+    int64_t *value
 )
 {
     if (parse_shift(parser, value) != 0) {
@@ -464,13 +521,15 @@ static int parse_expression_and(
 
         parser->cursor++;
 
-        uint32_t right;
+        int64_t right;
 
         if (parse_shift(parser, &right) != 0) {
             return -1;
         }
 
-        *value &= right;
+        *value = (int64_t)(
+            (uint32_t)*value & (uint32_t)right
+        );
     }
 
     return 0;
@@ -482,7 +541,7 @@ static int parse_expression_and(
 
 static int parse_expression_xor(
     ExprParser *parser,
-    uint32_t *value
+    int64_t *value
 )
 {
     if (parse_expression_and(parser, value) != 0) {
@@ -498,13 +557,15 @@ static int parse_expression_xor(
 
         parser->cursor++;
 
-        uint32_t right;
+        int64_t right;
 
         if (parse_expression_and(parser, &right) != 0) {
             return -1;
         }
 
-        *value ^= right;
+        *value = (int64_t)(
+            (uint32_t)*value ^ (uint32_t)right
+        );
     }
 
     return 0;
@@ -516,7 +577,7 @@ static int parse_expression_xor(
 
 static int parse_expression_or(
     ExprParser *parser,
-    uint32_t *value
+    int64_t *value
 )
 {
     if (parse_expression_xor(parser, value) != 0) {
@@ -533,13 +594,15 @@ static int parse_expression_or(
 
         parser->cursor++;
 
-        uint32_t right;
+        int64_t right;
 
         if (parse_expression_xor(parser, &right) != 0) {
             return -1;
         }
 
-        *value |= right;
+        *value = (int64_t)(
+            (uint32_t)*value | (uint32_t)right
+        );
     }
 
     return 0;
@@ -549,10 +612,10 @@ static int parse_expression_or(
 // Evaluate Expression
 // ========================================
 
-int evaluate_expression(
+int evaluate_expression_signed(
     const char *expression,
     const SymbolTable *symbols,
-    uint32_t *value
+    int64_t *value
 )
 {
     if (expression == NULL ||
@@ -575,6 +638,62 @@ int evaluate_expression(
     if (*parser.cursor != '\0') {
         return -1;
     }
+
+    return 0;
+}
+
+int evaluate_li_immediate(
+    const char *expression,
+    const SymbolTable *symbols,
+    int64_t *value
+)
+{
+    if (value == NULL) {
+        return -1;
+    }
+
+    int64_t immediate;
+
+    if (evaluate_expression_signed(
+            expression,
+            symbols,
+            &immediate
+        ) != 0 ||
+        immediate < INT32_MIN ||
+        immediate > (int64_t)UINT32_MAX) {
+        return -1;
+    }
+
+    /* li accepts a 32-bit bit pattern as well as a signed integer. */
+    if (immediate > INT32_MAX) {
+        immediate -= (int64_t)UINT32_MAX + 1;
+    }
+
+    *value = immediate;
+    return 0;
+}
+
+int evaluate_expression(
+    const char *expression,
+    const SymbolTable *symbols,
+    uint32_t *value
+)
+{
+    if (value == NULL) {
+        return -1;
+    }
+
+    int64_t signed_value;
+
+    if (evaluate_expression_signed(
+            expression,
+            symbols,
+            &signed_value
+        ) != 0) {
+        return -1;
+    }
+
+    *value = (uint32_t)signed_value;
 
     return 0;
 }
@@ -612,9 +731,9 @@ int process_equ_directive(
         return -1;
     }
 
-    uint32_t value;
+    int64_t value;
 
-    if (evaluate_expression(
+    if (evaluate_expression_signed(
             expression,
             symbols,
             &value
@@ -622,7 +741,11 @@ int process_equ_directive(
         return -1;
     }
 
-    if (symbol_table_add(symbols, name, value) != 0) {
+    if (symbol_table_add_expression_value(
+            symbols,
+            name,
+            value
+        ) != 0) {
         return -1;
     }
 

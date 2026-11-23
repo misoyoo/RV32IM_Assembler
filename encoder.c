@@ -593,12 +593,6 @@ int encode_system_type(
     if (strcmp(mnemonic, "mret") == 0) {
         *instruction = 0x30200073;
     }
-    else if (strcmp(mnemonic, "sret") == 0) {
-        *instruction = 0x10200073;
-    }
-    else if (strcmp(mnemonic, "uret") == 0) {
-        *instruction = 0x00200073;
-    }
     else if (strcmp(mnemonic, "ecall") == 0) {
         *instruction = 0x00000073;
     }
@@ -610,9 +604,6 @@ int encode_system_type(
     }
     else if (strcmp(mnemonic, "fence") == 0) {
         *instruction = 0x0FF0000F;
-    }
-    else if (strcmp(mnemonic, "fence.i") == 0) {
-        *instruction = 0x0000100F;
     }
     else {
         return -1;
