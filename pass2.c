@@ -1561,10 +1561,15 @@ static int write_data_value(
 /* Check whether a value fits in .byte or .half */
 
 static int check_data_value_range(
+    const char *expression,
     uint32_t value,
     uint32_t width
 )
 {
+    if (expression == NULL) {
+        return -1;
+    }
+
     if (width == 4) {
         return 0;
     }
@@ -1573,25 +1578,30 @@ static int check_data_value_range(
         return -1;
     }
 
+    /* Skip leading whitespace */
+    while (*expression == ' ' ||
+           *expression == '\t' ||
+           *expression == '\n' ||
+           *expression == '\r') {
+        expression++;
+    }
+
     uint32_t bit_count = width * 8u;
 
+    /* Handle explicitly negative values */
+    if (*expression == '-') {
+        uint32_t magnitude = 0u - value;
+        uint32_t signed_min_magnitude =
+            1u << (bit_count - 1u);
+
+        return magnitude <= signed_min_magnitude ? 0 : -1;
+    }
+
+    /* Handle non-negative values */
     uint32_t unsigned_max =
         (1u << bit_count) - 1u;
 
-    /* Accept unsigned values */
-    if (value <= unsigned_max) {
-        return 0;
-    }
-
-    /* Accept valid negative two's-complement values */
-    uint32_t signed_min_encoding =
-        0u - (1u << (bit_count - 1u));
-
-    if (value >= signed_min_encoding) {
-        return 0;
-    }
-
-    return -1;
+    return value <= unsigned_max ? 0 : -1;
 }
 
 /* Convert one hexadecimal digit */
@@ -1805,7 +1815,11 @@ static int emit_data_directive(
                     symbols,
                     &value
                 ) != 0 ||
-                check_data_value_range(value, width) != 0) {
+                check_data_value_range(
+                parsed_line->operands[i],
+                value,
+                width
+            ) != 0) {
                 return -1;
             }
 
