@@ -66,7 +66,7 @@ Encoder는 명령어 형식에 맞게 각 비트 필드를 조합하여 32비트
 
 `li`는 32-bit 값 중 signed 12-bit 범위이면 `addi` 한 개, 그 외는 `lui`와 `addi` 두 개로 확장한다. `la`는 `auipc`와 `addi` 두 개로 확장하고 Pass 1에서 8바이트를 차지한다. 상위 immediate 계산은 하위 12비트가 sign extension되는 규칙에 맞춰 보정한다.
 
-필수 시스템 명령은 `ecall`, `ebreak`, `mret`, `wfi`, 인자 없는 `fence`이다. `sret`, `fence.i`, `uret`은 Pass 1과 인코더에서 거부한다. CSR 이름은 PDF에 지정된 9개만 허용하며, 다른 CSR은 숫자 주소 0~`0xFFF`로 입력한다.
+필수 시스템 명령은 `ecall`, `ebreak`, `mret`, `wfi`, 인자 없는 `fence`이다. CSR 이름은 PDF에 지정된 9개만 허용하며, 다른 CSR은 숫자 주소 0~`0xFFF`로 입력한다.
 
 ## 5. 지시어 처리
 
